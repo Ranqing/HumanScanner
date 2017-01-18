@@ -11,7 +11,6 @@
 class MatchHash;
 class RegionVoter;
 
-
 const float c_thresh_zncc  = 0.95;	//0.85,1.15
 const float c_thresh_prior = 1.35;
 const float c_thresh_e_zncc  = 0.5;
@@ -26,7 +25,7 @@ public:
     ~StereoFlow();
 
     void calc_mean_images();    //for zncc calculation in stereo_flow class
-    void calc_borders();
+    void calc_support_region();
     //    m_stereo_pyramid[p]->set_patch_params(wnd_sz + 2);
     //    m_stereo_pyramid[p]->calc_borders();
 
@@ -56,13 +55,9 @@ private:
     CostMethod * m_cost_mtd;
     AggrMethod * m_aggr_mtd;
     CrossShapedRegion * m_support_region;
+    RegionVoter * m_region_voter;
 
-    //RegionVoter * m_reigon_voter;
     //ScanlineOptimizer * m_scanline_optimizer;
-
-    //region voting
-    //    int * m_dist_hist, m_taus;      //histogram of disparites to record votes
-    //    float m_tauh;                   //params for region voting
 
     //scanline optimization
     //    float m_pi1, m_pi2;
@@ -91,13 +86,24 @@ public:
 
     void propagate(const int direction, priority_queue<Match>& queue, MatchHash *& hashmap);
     void seed_propagate(const int direction);                                                           //propagate
-    void re_match(const int direction);                                                                 //fill in unexpanded pixels
-    void scanline_optimize(const int direction);
-    void check_outliers();
 
-    void cross_validation();
+    void copy_disp_2_disp_l();
+    void copy_disp_2_disp_r();
+    void calc_rematch_borders(const vector<float>& disp, const vector<uchar>& mask, const int scanline, vector<int>& border0, vector<int>& border1);
+    void re_match_l();                                                                 //fill in unexpanded pixels
+    void re_match_r();
+
+#if 0
+    void scanline_optimize(const int direction);
+#endif
+
+    void check_outliers();
+    void region_voting();
+
     void median_filter();
     void subpixel_enhancement();
+
+    void cross_validation();
 
     void set_wnd_size(const int wnd_sz) { m_wnd_size = wnd_sz; }
     int  get_wnd_size() { return m_wnd_size; }
@@ -162,6 +168,7 @@ inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL,
     m_best_k_l.resize(m_total); m_best_k_r.resize(m_total), m_best_k.resize(m_total);
 
     m_support_region = new CrossShapedRegion();
+    m_region_voter = NULL;
     m_cost_mtd = NULL;
     m_aggr_mtd = NULL;
 
@@ -215,7 +222,7 @@ inline float calc_max_prior(const float max_mcost, const float sec_mcost) {
 
 inline void cluster_max_takes_all(const vector<float>& mcosts, int& maxk, float& max_mcost, float& sec_mcost) {
 
-    if(mcosts.size() == 1) { cout << "here" << endl; maxk = 0; max_mcost = mcosts[0];  sec_mcost = max_mcost/c_thresh_prior;  return; }
+    if(mcosts.size() == 1) { /*cout << "here" << endl;*/ maxk = 0; max_mcost = mcosts[0];  sec_mcost = max_mcost/c_thresh_prior;  return; }
 
     maxk = 0;
     max_mcost = mcosts[0], sec_mcost = -1;

@@ -9,6 +9,7 @@
 
 #include "../../../Qing/qing_disp.h"
 #include "../../../Qing/qing_timer.h"
+#include "../../../Qing/qing_image.h"
 
 const CCType CCNAME = zncc;
 const CAType CANAME = bf;
@@ -57,7 +58,7 @@ void StereoFlow::calc_mean_images() {
 # endif
 }
 
-void StereoFlow::calc_borders() {
+void StereoFlow::calc_support_region() {
     m_support_region->calc_patch_borders(m_view_l, m_view_r, m_mask_l, m_mask_r );
 }
 
@@ -488,10 +489,6 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
         Point2f t_key(t_match.get_x(), t_match.get_y());
         MatchValue t_value(t_match.get_d(), t_match.get_mcost(), t_match.get_prior());
 
-        //        cout << "key-value: " ;
-        //        cout << lx << ' ' << ly << ' ' << rx << ' ' << ry  << ' ';
-        //        cout << t_value ;
-
         if( false == hashmap->max_store(t_key, t_value, 1) ) continue;
         //hashmap->parse();
 
@@ -523,14 +520,10 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
                 else
                     calc_cluster_costs_r(k-1, k+1, cur_rx, cur_ry, mcosts);
 
-                // cout << "dx = " << dx << ", dy = " << dy << ", mcosts: " << mcosts[0] << ", " << mcosts[1] << ", " << mcosts[2] << endl;
-
                 int maxk;
                 float max_mcost, sec_mcost, prior;
                 cluster_max_takes_all(mcosts, maxk, max_mcost, sec_mcost);
                 prior = calc_max_prior(max_mcost, sec_mcost);
-
-                // cout << "maxk = " << maxk << ", max_mcost = " << max_mcost << ", sec_mcost = " << sec_mcost << ", prior = " << prior << endl;
 
                 if(max_mcost >= c_thresh_e_zncc && prior >= c_thresh_e_prior) {
                     float d = qing_k_2_disp(m_max_disp, m_min_disp, maxk+k-1);
@@ -544,13 +537,10 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
                 }
             }
         }
-        //cout << "neighbors size: " << neighbors.size() << "....";
 
         if(cnt * 2 >= total) {
             for(int i = 0; i < cnt; ++i) queue.push(neighbors[i]);
-            //cout << "stored in priority queue...." ;
         }
-        // cout << endl;
     }
 }
 
@@ -602,19 +592,183 @@ void StereoFlow::seed_propagate(const int direction) {
     else hashmap->copy_to(m_matches_r);
 }
 
-void StereoFlow::re_match(const int direction) {
+void StereoFlow::copy_disp_2_disp_l() {
+    m_disp_l.clear(); m_disp_l.resize(m_total); copy(m_disp.begin(), m_disp.end(), m_disp_l.begin());
+    m_best_k_l.clear(); m_best_k_l.resize(m_total); copy(m_best_k.begin(), m_best_k.end(), m_best_k_l.begin());
+    m_best_mcost_l.clear(); m_best_mcost_l.resize(m_total); copy(m_best_mcost.begin(), m_best_mcost.end(), m_best_mcost_l.begin());
+    m_best_prior_l.clear(); m_best_prior_l.resize(m_total); copy(m_best_prior.begin(), m_best_prior.end(), m_best_prior_l.begin());
+}
+
+void StereoFlow::copy_disp_2_disp_r() {
+    m_disp_r.clear(); m_disp_r.resize(m_total); memset(&m_disp_r.front(), 0.f, sizeof(float)*m_total);
+    m_best_k_r.clear(); m_best_k_r.resize(m_total); memset(&m_best_k_r.front(), 0, sizeof(int)*m_total);
+    m_best_mcost_r.clear(); m_best_mcost_r.resize(m_total); memset(&m_best_mcost_r.front(), -1.f, sizeof(float)*m_total);
+    m_best_prior_r.clear(); m_best_prior_r.resize(m_total); memset(&m_best_prior_r.front(),  0.f, sizeof(float)*m_total);
+
+    for(int idx_l = 0; idx_l < m_total; ++idx_l) {
+        if(0==m_mask_l[idx_l] || 0==m_disp[idx_l]) continue;
+
+        float d = m_disp[idx_l];
+        int idx_r = idx_l - d;
+
+        if(0==m_mask_r[idx_r]) continue;
+        m_disp_r[idx_r] = d;
+        m_best_k_r[idx_r] = m_best_k[idx_l];
+        m_best_mcost_r[idx_r] = m_best_mcost[idx_l];
+        m_best_prior_r[idx_r] = m_best_prior[idx_l];
+    }
 
 }
 
-void StereoFlow::scanline_optimize(const int direction) {
+void StereoFlow::calc_rematch_borders(const vector<float> &disp, const vector<uchar> &mask, const int scanline, vector<int> &border0, vector<int> &border1) {
 
+# if 0
+    Mat disp_img, disp_bgr_img;
+    uchar * ptr;
+    if(0 == scanline) {
+        cout << "scanline == " << scanline << endl;
+        disp_img.create(m_h, m_w, CV_8UC1);
+        qing_float_vec_2_uchar_img(disp, 1, disp_img);
+        disp_bgr_img.create(m_h, m_w, CV_8UC3);
+        cvtColor(disp_img, disp_bgr_img, CV_GRAY2BGR);
+        ptr = (uchar*)disp_bgr_img.ptr<uchar>(0);
+    }
+# endif
+
+    for(int x = 0; x < m_w; ++x) {
+        int idx = scanline * m_w + x;
+        if(0==mask[idx]) continue;
+        if(0==disp[idx]) {
+            int pre_x = x - 1, pre_idx = idx - 1;
+            while(0 <= pre_x) {
+                if(0!=mask[pre_idx] && 0==disp[pre_idx]) {
+                    pre_x--;
+                    pre_idx--;
+                }
+                else break;
+            }
+            if(0 > pre_x || (0 <= pre_x && 0 == mask[pre_idx]))
+                pre_x = -1;
+
+            int pos_x = x + 1;
+            int pos_idx = idx + 1;
+            while(m_w > pos_x) {
+                if(0!=mask[pos_idx] && 0==disp[pos_idx]) {
+                    pos_x++;
+                    pos_idx++;
+                }
+                else break;
+            }
+            if(m_w <= pos_x || (m_w > pos_x && 0 == mask[pos_idx]))
+                pos_x = - 1;
+
+            border0[x] = pre_x;
+            border1[x] = pos_x;
+        }
+    }
+
+#if 0
+    if(0==scanline) {
+        cout << "scanline == " << scanline << endl;
+        for(int x = 0; x < m_w; ++x) {
+            int idx = scanline * m_w + x;
+            if(0==mask[idx]||0!=disp[idx]) continue;
+            if(border0[x] == -1 || border1[x] == -1) {
+                ptr[3*idx + 0] = 0;
+                ptr[3*idx + 1] = 0;
+                ptr[3*idx + 2] = 255;
+            }
+            else {
+                ptr[3*idx + 0] = 255;
+                ptr[3*idx + 1] = 0;
+                ptr[3*idx + 2] = 0;
+
+            }
+        }
+        imshow("test_rematch_border", disp_bgr_img);
+        waitKey(0);
+        destroyWindow("test_rematch_border");
+    }
+#endif
+}
+
+void StereoFlow::re_match_l() {
+    copy_disp_2_disp_l();
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        vector<int> border0(m_w, -1);
+        vector<int> border1(m_w, -1);
+        calc_rematch_borders(m_disp_l, m_mask_l, y, border0, border1);
+
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_l[idx] || 0!=m_disp_l[idx]) {idx++;continue;}
+            int st_k, ed_k, range;
+            if(-1==border0[x] || -1==border1[x]) {
+                st_k = 1; ed_k = m_disp_ranges;
+            }
+            else {
+                st_k = m_best_k_l[ y * m_w + border0[x] ];
+                ed_k = m_best_k_l[ y * m_w + border1[x] ];
+                if(st_k > ed_k) swap(st_k, ed_k);
+            }
+            range = ed_k - st_k;
+
+            vector<float> mcosts(range+1, -1.f);
+            calc_cluster_costs_l(st_k, ed_k, x, y, mcosts);
+
+            int maxk;
+            float max_mcost, sec_mcost;
+            cluster_max_takes_all(mcosts, maxk, max_mcost, sec_mcost);
+
+            maxk += st_k;
+            m_disp_l[idx] = qing_k_2_disp(m_max_disp, m_min_disp, maxk);
+            m_best_k_l[idx] = maxk;
+            m_best_mcost_l[idx] = max_mcost;
+            m_best_prior_l[idx] = calc_max_prior(max_mcost, sec_mcost);
+            idx++;
+        }
+    }
+}
+
+void StereoFlow::re_match_r() {
+    copy_disp_2_disp_r();
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        vector<int> border0(m_w, -1);
+        vector<int> border1(m_w, -1);
+        calc_rematch_borders(m_disp_r, m_mask_r, y, border0, border1);
+
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_r[idx] || 0!=m_disp_r[idx]) {idx++; continue;}
+            int st_k, ed_k, range;
+            if(-1==border0[x] || -1==border1[x]) {
+                st_k = 1; ed_k = m_disp_ranges;
+            }
+            else {
+                st_k = m_best_k_r[ y * m_w + border0[x] ];
+                ed_k = m_best_k_r[ y * m_w + border1[x] ];
+                if(st_k > ed_k) swap(st_k, ed_k);
+            }
+            range = ed_k - st_k;
+
+            vector<float> mcosts(range+1, -1.f);
+            calc_cluster_costs_r(st_k, ed_k, x, y, mcosts);
+
+            int maxk;
+            float max_mcost, sec_mcost;
+            cluster_max_takes_all(mcosts, maxk, max_mcost, sec_mcost);
+
+            maxk += st_k;
+            m_disp_r[idx] = qing_k_2_disp(m_max_disp, m_min_disp, maxk);
+            m_best_k_r[idx] = maxk;
+            m_best_mcost_r[idx] = max_mcost;
+            m_best_prior_r[idx] = calc_max_prior(max_mcost, sec_mcost);
+            idx ++;
+        }
+    }
 }
 
 void StereoFlow::check_outliers() {
 
 }
-
-
 
 void StereoFlow::median_filter() {
 
@@ -623,3 +777,12 @@ void StereoFlow::median_filter() {
 void StereoFlow::subpixel_enhancement() {
 
 }
+
+
+#if 0
+void StereoFlow::scanline_optimize(const int direction) {
+
+}
+#endif
+
+

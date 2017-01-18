@@ -12,6 +12,7 @@
 #define DISP_STEP 1             //步长
 #define DISP_OCCLUSION 1        //遮挡
 #define DISP_MISMATCH  2        //误匹配
+#define REGION_VOTE_TIMES 5
 
 #define MAX_LEVELS 5
 

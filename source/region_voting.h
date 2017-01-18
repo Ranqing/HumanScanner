@@ -13,6 +13,10 @@ public:
 private:
      int m_taus;
      float m_tauh;
+
+     //region voting
+     //    int * m_dist_hist, m_taus;      //histogram of disparites to record votes
+     //    float m_tauh;                   //params for region voting
 };
 
 inline RegionVoter::RegionVoter(): m_taus(TAUS), m_tauh(TAUH) {

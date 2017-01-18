@@ -94,8 +94,13 @@ void HumanBodyScanner::load_and_crop_images()
         m_mskR = Mat(m_size, CV_8UC1, cv::Scalar(255));
     }
     else {
-        threshold(full_mskL, full_mskL, 75, 255, THRESH_BINARY);
-        threshold(full_mskR, full_mskR, 75, 255, THRESH_BINARY);
+//        threshold(full_mskL, full_mskL, 75, 255, THRESH_BINARY);
+//        threshold(full_mskR, full_mskR, 75, 255, THRESH_BINARY);
+
+        qing_threshold_msk(full_mskL, full_mskL, 128, 255);
+        qing_threshold_msk(full_mskR, full_mskR, 128, 255);
+        m_mskL = Mat::zeros(m_size, CV_8UC1);
+        m_mskR = Mat::zeros(m_size, CV_8UC1);
         m_mskL = full_mskL(Rect(m_crop_pointL, m_size)).clone();
         m_mskR = full_mskR(Rect(m_crop_pointR, m_size)).clone();
     }
@@ -170,9 +175,11 @@ void HumanBodyScanner::build_stereo_pyramid()
         pyrDown(t_imgL, t_imgL);
         pyrDown(t_imgR, t_imgR);
         pyrDown(t_mskL, t_mskL);
-        threshold(t_mskL, t_mskL, 128, 255, THRESH_BINARY);
+        // threshold(t_mskL, t_mskL, 128, 255, THRESH_BINARY);
+        qing_threshold_msk(t_mskL, t_mskL, 128, 255);
         pyrDown(t_mskR, t_mskR);
-        threshold(t_mskR, t_mskR, 128, 255, THRESH_BINARY);
+        // threshold(t_mskR, t_mskR, 128, 255, THRESH_BINARY);
+        qing_threshold_msk(t_mskR, t_mskR, 128, 255);
     }
 
     cout << "\nstereo pyramid building done. max levels = " << m_max_levels << endl;
@@ -189,8 +196,9 @@ void HumanBodyScanner::match()
         m_stereo_pyramid[p]->set_wnd_size(wnd_sz);
         m_stereo_pyramid[p]->calc_mean_images();
         m_stereo_pyramid[p]->set_patch_params(wnd_sz + 2);
-        //       m_stereo_pyramid[p]->calc_borders();
-        //       m_stereo_pyramid[p]->set_voting_params(wnd_sz);
+        m_stereo_pyramid[p]->calc_support_region();
+        //m_stereo_pyramid[p]->set_voting_params(wnd_sz);
+
 
         double duration = (double)getTickCount();
         if(m_max_levels - 1 == p)
@@ -230,8 +238,8 @@ void HumanBodyScanner::match()
         //@add by ranqing : can be replaced by qingxiong-unpsampling codes
         printf("\n\trematch unexpanded disparities ...\n");
         duration = (double)getTickCount();
-        m_stereo_pyramid[p]->re_match(0);
-        m_stereo_pyramid[p]->re_match(1);
+        m_stereo_pyramid[p]->re_match_l();
+        m_stereo_pyramid[p]->re_match_r();
         m_stereo_pyramid[p]->cross_validation();
         printf( "\n\t--------------------------------------------------------\n" );
         printf( "\trematch: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
@@ -240,7 +248,9 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_rematch_infos(p);
 #endif
+        continue;
 
+# if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                           scanline optimization                                                    */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -252,29 +262,32 @@ void HumanBodyScanner::match()
         printf( "\n\t--------------------------------------------------------\n" );
         printf( "\tscanline optimization : %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
         printf( "\t--------------------------------------------------------\n" );
-#if DEBUG
+# if DEBUG
         m_debugger->save_so_infos(p);                                     //save scanline optimize infos
-#endif
+# endif
+# endif
 
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                         disparity refinement : region voting                                       */
         /*--------------------------------------------------------------------------------------------------------------------*/
-        printf("\n\tdisparity general refinment...\n");
-        duration = (double)getTickCount();
-        //m_stereo_pyramid[p]->region_voting();
-        m_stereo_pyramid[p]->check_outliers();                  //occlusion: 1(Red);   Mismatch: 2(Green)
-        printf( "\t--------------------------------------------------------\n" );
-        printf( "\tregion voting: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
-        printf( "\t--------------------------------------------------------\n" );
+        printf("\n\tdisparity general refinment...region voting...%d times\n", REGION_VOTE_TIMES);
+        for(int t = 0; t < REGION_VOTE_TIMES; ++t) {
+            duration = (double)getTickCount();
+            m_stereo_pyramid[p]->check_outliers();                  //occlusion: 1(Red);   Mismatch: 2(Green)
+            m_stereo_pyramid[p]->region_voting();
+            printf( "\t--------------------------------------------------------\n" );
+            printf( "\tregion voting: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
+            printf( "\t--------------------------------------------------------\n" );
+        }
 #if DEBUG
         m_debugger->save_rv_infos(p);                                      //save region voting infos
 #endif
-
 
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                         disparity refinement : median filter                                       */
         /*--------------------------------------------------------------------------------------------------------------------*/
         //ranqing @ 2016.11.16
+        printf("\n\tdisparity general refinment...median filter...\n");
         duration = (double)getTickCount();
         m_stereo_pyramid[p]->median_filter();
         m_stereo_pyramid[p]->cross_validation();
@@ -308,7 +321,7 @@ void HumanBodyScanner::match()
 }
 
 void HumanBodyScanner::copy_disp_from_stereo() {
-    cout << "\n\tcopy disparity from stere..." << endl;
+    cout << "\n\tcopy disparity from stereo pyramid..." << endl;
     m_dispL = Mat::zeros(m_size, CV_32FC1);
     m_dispR = Mat::zeros(m_size, CV_32FC1);
     m_disp = Mat::zeros(m_size, CV_32FC1);
