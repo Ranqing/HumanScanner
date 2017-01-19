@@ -157,7 +157,7 @@ void HumanBodyScanner::build_stereo_pyramid()
         t_min_disp = t_min_disp * 0.5;
         t_disp_scale = min(t_disp_scale * 2, 1.f);
 
-# if DEBUG
+#if DEBUG
         if(p) {
             string savefn;
 
@@ -170,7 +170,7 @@ void HumanBodyScanner::build_stereo_pyramid()
             savefn = m_out_dir + "/crop_mskR_" + int2string(p) + ".jpg";
             qing_save_image(savefn, t_mskR);
         }
-# endif
+#endif
         //guassian filter then choose half cols
         pyrDown(t_imgL, t_imgL);
         pyrDown(t_imgR, t_imgR);
@@ -232,10 +232,12 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_prop_infos(p);                                                   //save propagate disparitys
 #endif
+
+#if 1
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                           re-match unexpanded pixels                                               */
         /*--------------------------------------------------------------------------------------------------------------------*/
-        //@add by ranqing : can be replaced by qingxiong-unpsampling codes
+        //@add by ranqing : can be replaced by qx-unpsampling codes
         printf("\n\trematch unexpanded disparities ...\n");
         duration = (double)getTickCount();
         m_stereo_pyramid[p]->re_match_l();
@@ -247,8 +249,9 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_rematch_infos(p);
 #endif
+#endif
 
-# if 0
+#if 1
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                           upsampling expanded pixels using guidiance filter                        */
         /*--------------------------------------------------------------------------------------------------------------------*/

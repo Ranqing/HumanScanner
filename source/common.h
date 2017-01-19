@@ -13,7 +13,7 @@
 #define DISP_OCCLUSION 1        //遮挡
 #define DISP_MISMATCH  2        //误匹配
 #define DISP_TOLERANCE 0
-#define REGION_VOTE_TIMES 5
+#define REGION_VOTE_TIMES 3
 
 #define MAX_LEVELS 5
 

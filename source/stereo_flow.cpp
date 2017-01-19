@@ -770,14 +770,17 @@ void StereoFlow::re_match_r() {
 
 void StereoFlow::upsampling_using_rbf() {
     cout << "\tupsampling left disparities..." ;
-    upsampling_using_rbf(m_rgb_view_l, m_mask_l, m_disp_l);
-    cout << "done..." << endl;
+    QingTimer timer;
+    upsampling_using_rbf(m_rgb_view_l, m_mask_l, m_disp_l, m_best_k_l, m_best_mcost_l, m_best_prior);
+    cout << "done..." << timer.duration() << "s" << endl;
     cout << "\tupsamling right disparities...";
-    upsampling_using_rbf(m_rgb_view_r, m_mask_r, m_disp_r);
-    cout << "done..." << endl;
+    timer.restart();
+    upsampling_using_rbf(m_rgb_view_r, m_mask_r, m_disp_r, m_best_k_r, m_best_mcost_r, m_best_prior);
+    cout << "done..." << timer.duration() << "s" << endl;
 }
 
-void StereoFlow::upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& mask, vector<float>& disp) {
+void StereoFlow::upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& mask,
+                                      vector<float>& disp, vector<int>& best_k, vector<float>& best_mcost, vector<float>& best_prior) {
 
     float sigma_spatial = 0.005f;
     float sigma_range = 0.1f;
@@ -800,16 +803,25 @@ void StereoFlow::upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& 
 
 
     memset(&disp.front(), 0.f, sizeof(float)*m_total);
+    memset(&best_k.front(), 0, sizeof(int)*m_total);
+    memset(&best_mcost.front(), -1, sizeof(float)*m_total);
+    memset(&best_prior.front(), 0, sizeof(float)*m_total);
     for(int idx = 0; idx < m_total; idx++) {
         if(0==mask[idx]) continue;
-        else  disp[idx] = out[idx];
+        else
+        {
+            disp[idx] = out[idx];
+            best_k[idx] = qing_disp_2_k(m_max_disp, m_min_disp, disp[idx]);
+            best_mcost[idx] = c_thresh_e_zncc;
+            best_prior[idx] = c_thresh_e_prior;
+        }
     }
-# if 1
+# if 0
     Mat disp_img(m_h, m_w, CV_8UC1);
     qing_float_vec_2_uchar_img(disp, m_scale, disp_img);
     imshow("test_unsampling_using_rbf", disp_img);
     waitKey(0);
-    destroyWindow("test_upsampling_using_rbf");
+    destroyWindow("test_unsampling_using_rbf");
 # endif
 }
 
@@ -1076,7 +1088,6 @@ void StereoFlow::median_filter() {
 }
 
 void StereoFlow::subpixel_enhancement() {
-
 
 }
 

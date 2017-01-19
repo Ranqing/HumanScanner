@@ -96,7 +96,8 @@ public:
 
     //fill in unexpanded pixels using guidance filter
     void upsampling_using_rbf();
-    void upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& mask, vector<float>& disp);
+    void upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& mask,
+                              vector<float>& disp, vector<int>& best_k, vector<float>& best_mcost, vector<float>& best_prior);
 
 #if 0
     void scanline_optimize(const int direction);
