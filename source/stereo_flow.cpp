@@ -1087,8 +1087,33 @@ void StereoFlow::median_filter() {
     }
 }
 
+//using formula
 void StereoFlow::subpixel_enhancement() {
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_l[idx] || 0.f == m_disp[idx]) continue;
 
+            float d = m_disp[idx];
+            int lx = x, ly = y;
+
+            if( 0>(x-d) || 0==m_mask_r[idx - d] ) continue;
+
+            int st_k = qing_disp_2_k(m_max_disp, m_min_disp, d-1);
+            int ed_k = qing_disp_2_k(m_max_disp, m_min_disp, d+1);
+            int range = ed_k - st_k + 1;
+
+            vector<float> mcosts(range, -1.f);
+            calc_cluster_costs_l(st_k, ed_k, lx, ly, mcosts);
+
+            double sub_mcost = mcosts[0];
+            double mcost = mcosts[1];
+            double add_mcost = mcosts[2];
+            double fenmu = (add_mcost + sub_mcost - 2 * mcost);
+            if(fenmu != 0) {
+                m_disp_l[idx] = d - 0.5 * (add_mcost - sub_mcost) / fenmu;
+            }
+        }
+    }
 }
 
 

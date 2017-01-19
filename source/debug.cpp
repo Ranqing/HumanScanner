@@ -288,6 +288,11 @@ void Debugger::save_final_infos(const int level) {
 void Debugger::save_subpixel_infos(const int level) {
 
     string str = int2string(level);
-    string save_fn = m_save_dir + "/subpixel_disp_" + str + ".yml";
+    string save_fn = m_save_dir + "/subpixel_final_disp_" + str + ".txt";
+
+    int w = m_stereo_fl->get_w();
+    int h = m_stereo_fl->get_h();
+    vector<float>& disp = m_stereo_fl->get_disp();
+    save_float_vec_data(save_fn, w, h, disp);
     cout << "debug:\tsaving " << save_fn << endl;
 }
