@@ -1,12 +1,12 @@
 #ifndef REGION_VOTING_H
 #define REGION_VOTING_H
 
-#define TAUS 15
-#define TAUH 0.4f
-
 #include <iostream>
 #include <vector>
 using namespace std;
+
+#define TAUS 5
+#define TAUH 0.4f
 
 class RegionVoter
 {
@@ -14,8 +14,8 @@ public:
      RegionVoter();
     ~RegionVoter();
 
-     int get_min_vote_count()   { return m_taus; }
-     float get_min_vote_ratio() { return m_tauh; }
+     int get_vote_count_thresh()   { return m_taus; }
+     float get_vote_ratio_thresh() { return m_tauh; }
 
 private:
      int m_taus;                                    //区域内最少票数

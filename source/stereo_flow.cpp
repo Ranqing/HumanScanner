@@ -11,6 +11,7 @@
 #include "../../../Qing/qing_disp.h"
 #include "../../../Qing/qing_timer.h"
 #include "../../../Qing/qing_image.h"
+#include "../../../Qing/qing_median_filter.h"
 
 const CCType CCNAME = zncc;
 const CAType CANAME = bf;
@@ -836,11 +837,33 @@ void StereoFlow::check_outliers_l() {
             idx++;
         }
     }
-# if 1
+
+# if 0
     Mat disp(m_h, m_w, CV_32FC1);
     Mat disp_img(m_h, m_w, CV_8UC1);
+    Mat disp_rgb_img(m_h, m_w, CV_8UC3);
     qing_vec_2_img<float>(m_disp_l, disp);
     disp.convertTo(disp_img, CV_8UC1, m_scale);
+    cvtColor(disp_img, disp_rgb_img, CV_GRAY2BGR);
+
+    uchar * ptr_rgb = (uchar *)disp_rgb_img.ptr<uchar>(0);
+
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_l[idx] || 0==m_outliers_l[idx]) {idx++;continue;}
+            if(DISP_MISMATCH == m_outliers_l[idx]) {                 //red
+                ptr_rgb[3*idx+0] = 0; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 255;
+            }
+            else if(DISP_OCCLUSION == m_outliers_l[idx]) {           //blue
+                ptr_rgb[3*idx+0] = 255; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 0;
+            }
+            idx ++;
+        }
+    }
+
+    imshow("test_outliers_l", disp_rgb_img);
+    waitKey(0);
+    destroyWindow("test_outliers_l");
 # endif
 }
 
@@ -868,34 +891,91 @@ void StereoFlow::check_outliers_r() {
             idx ++;
         }
     }
+
+# if 0
+    Mat disp(m_h, m_w, CV_32FC1), disp_img(m_h, m_w, CV_8UC1), disp_rgb_img(m_h, m_w, CV_8UC3);
+    qing_vec_2_img<float>(m_disp_r, disp);
+    disp.convertTo(disp_img, CV_8UC1, m_scale);
+    cvtColor(disp_img, disp_rgb_img, CV_GRAY2BGR);
+
+    uchar * ptr_rgb = (uchar *)disp_rgb_img.ptr<uchar>(0);
+
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_r[idx] || 0==m_outliers_r[idx]) {idx++;continue;}
+            if(DISP_MISMATCH == m_outliers_r[idx]) {                 //red
+                ptr_rgb[3*idx+0] = 0; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 255;
+            }
+            else if(DISP_OCCLUSION == m_outliers_r[idx]) {           //blue
+                ptr_rgb[3*idx+0] = 255; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 0;
+            }
+            idx ++;
+        }
+    }
+
+    imshow("test_outliers_r", disp_rgb_img);
+    waitKey(0);
+    destroyWindow("test_outliers_r");
+# endif
 }
 
 void StereoFlow::init_region_voter() {
     m_region_voter = new RegionVoter();
-    cout << "\n\tregion voting. min_vote_count = " << m_region_voter->get_min_vote_count()
-         << ", min_vote_ratio = " << m_region_voter->get_min_vote_ratio() << endl;
+    cout << "\tregion voting. min_vote_count = " << m_region_voter->get_vote_count_thresh()
+         << ", min_vote_ratio = " << m_region_voter->get_vote_ratio_thresh() << endl;
 }
 
 void StereoFlow::region_voting() {
     region_voting(0, m_mask_l, m_disp_l, m_best_k_l, m_best_mcost_l, m_best_prior_l, m_outliers_l);
+    cout << "\tend of region voting in disp_left..." << endl;
     region_voting(1, m_mask_r, m_disp_r, m_best_k_r, m_best_mcost_r, m_best_prior_r, m_outliers_r);
+    cout << "\tend of region voting in disp_right..." << endl;
+# if 0
+    Mat disp_l(m_h, m_w, CV_32FC1), disp_img_l(m_h, m_w, CV_8UC1);
+    qing_vec_2_img<float>(m_disp_l, disp_l);
+    disp_l.convertTo(disp_img_l, CV_8UC1, m_scale);
+
+    Mat disp_r(m_h, m_w, CV_32FC1), disp_img_r(m_h, m_w, CV_8UC1);
+    qing_vec_2_img<float>(m_disp_r, disp_r);
+    disp_r.convertTo(disp_img_r, CV_8UC1, m_scale);
+    imshow("regionvoting_disp_l", disp_img_l);
+    imshow("regionvoting_disp_r", disp_img_r);
+    waitKey(0);
+    destroyAllWindows();
+# endif
 }
 
 void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, vector<float>& disp,
                                vector<int>& best_k, vector<float>& best_mcost, vector<float>& best_prior,
                                vector<uchar>& outliers) {
     vector<float> res_disp(m_total, 0.f); copy(disp.begin(), disp.end(), res_disp.begin());
-    vector<int> res_best_k(m_total, 0.f); copy(best_k.begin(), best_k.end(), best_k.begin());
-    vector<float> res_best_mcost(m_total, -1.f); copy(best_mcost.begin(), best_mcost.end(), best_mcost.begin());
-    vector<float> res_best_prior(m_total, 0.f);  copy(best_prior.begin(), best_prior.end(), best_prior.begin());
+    vector<int> res_best_k(m_total, 0);  copy(best_k.begin(), best_k.end(),res_best_k.begin());
+    vector<float> res_best_mcost(m_total, -1.f); copy(best_mcost.begin(), best_mcost.end(), res_best_mcost.begin());
+    vector<float> res_best_prior(m_total, 0.f);  copy(best_prior.begin(), best_prior.end(), res_best_prior.begin());
+
+#if 0
+    Mat test_img(m_h, m_w, CV_8UC1);
+    qing_float_vec_2_uchar_img(res_disp, m_scale, test_img);
+    imshow("test_disp_regionvote", test_img);
+    waitKey(0);
+    destroyWindow("test_disp_regionvote");
+    uchar * ptr = (uchar *)test_img.ptr<uchar>(0);
+    for(int i = 0; i < m_total; ++i)
+        ptr[i]= res_best_k[i];
+    imshow("test_bestk_regionvote", test_img);
+    waitKey(0);
+    destroyWindow("test_bestk_regionvote");
+#endif
 
     vector<int>& borders_u = direction ? m_support_region->get_u_borders_r() : m_support_region->get_u_borders_l();
     vector<int>& borders_d = direction ? m_support_region->get_d_borders_r() : m_support_region->get_d_borders_l();
     vector<int>& borders_l = direction ? m_support_region->get_l_borders_r() : m_support_region->get_l_borders_l();
     vector<int>& borders_r = direction ? m_support_region->get_r_borders_r() : m_support_region->get_r_borders_l();
 
+    //using res_disp to updating votes
     for(int y = 0, idx = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
+
             if(0==mask[idx] || 0==outliers[idx]) {idx++;continue;}
 
             vector<float> disp_hist(m_disp_ranges+1, 0.f);
@@ -915,12 +995,14 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
                     int cur_y = y + dy;
                     if(0>cur_y || m_h <= cur_y) continue;
 
-                    cur_idx = cur_idx + dy * m_w;
-                    if(0==mask[cur_idx] || 0.f == disp[cur_idx]) continue;
-                    if(0!=outliers[cur_idx]) continue;
+                    cur_idx = cur_y * m_w + cur_x;
 
-                    float d = disp[cur_idx];
+                    if(0==mask[cur_idx] || 0.f == res_disp[cur_idx]) continue;        //invalid pixels can not to vote
+                    if(0!=outliers[cur_idx]) continue;                                //outliers can not to vote
+
+                    float d = res_disp[cur_idx];
                     int k = qing_disp_2_k(m_max_disp, m_min_disp, d);
+
                     votes++;
                     disp_hist[k]++;
                 }
@@ -928,14 +1010,14 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
 
             // is the number of vote sufficient
             // not sufficient;
-            if(votes <= m_region_voter->get_min_vote_count()) {idx++;continue;}
+            if(m_region_voter->get_vote_count_thresh() >= votes) {idx++;continue;}
 
             float new_d = disp[idx];
-            int new_best_k = 0;
-            int max_vote_cnt = 0;
+            int new_best_k = 0, max_vote_cnt = 0;
             // float vote_ratio = 0.f, max_vote_ratio = 0.f;
-            for(int k = 0; k < m_disp_ranges; ++k) {
+            for(int k = 0; k <= m_disp_ranges; ++k) {
                 int vote_cnt = disp_hist[k];
+                //   cout << "k = " << k << ", vote_cnt = " << vote_cnt << endl;
                 if(vote_cnt > max_vote_cnt) {
                     max_vote_cnt = vote_cnt;
                     new_best_k = k;
@@ -948,8 +1030,9 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
             res_disp[idx] = new_d;
             res_best_k[idx] = new_best_k;
             res_best_mcost[idx] = c_thresh_e_zncc;
-            res_best_prior[idx] = 1.f;
+            res_best_prior[idx] = c_thresh_e_prior;
             idx ++;
+
         }
     }
 
@@ -960,10 +1043,40 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
 }
 
 void StereoFlow::median_filter() {
+    vector<int> new_best_k_l(0), new_best_k_r(0);
 
+#if 0
+    Mat test_img(m_h, m_w, CV_8UC1);
+    uchar * ptr = (uchar *)test_img.ptr<uchar>(0);
+    for(int i = 0; i < m_total; ++i)
+        ptr[i]= m_best_k_l[i];
+    imshow("test", test_img);
+    waitKey(0);
+    destroyWindow("test");
+#endif
+
+    qing_median_filter(new_best_k_l, m_best_k_l, m_mask_l, m_h, m_w, m_wnd_size, m_disp_ranges+1);
+    qing_median_filter(new_best_k_r, m_best_k_r, m_mask_r, m_h, m_w, m_wnd_size, m_disp_ranges+1);
+
+    copy(new_best_k_l.begin(), new_best_k_l.end(), m_best_k_l.begin());
+    for(int idx = 0; idx < m_total; ++idx) {
+        if(0==m_mask_l[idx])continue;
+        m_disp_l[idx] = qing_k_2_disp(m_max_disp, m_min_disp, m_best_k_l[idx]);
+        m_best_mcost_l[idx] = c_thresh_e_zncc;
+        m_best_prior_l[idx] = c_thresh_e_prior;
+    }
+
+    copy(new_best_k_r.begin(), new_best_k_r.end(), m_best_k_r.begin());
+    for(int idx = 0; idx < m_total; ++idx) {
+        if(0==m_mask_r[idx])continue;
+        m_disp_r[idx] = qing_k_2_disp(m_max_disp, m_min_disp, m_best_k_r[idx]);
+        m_best_mcost_r[idx] = c_thresh_e_zncc;
+        m_best_prior_r[idx] = c_thresh_e_prior;
+    }
 }
 
 void StereoFlow::subpixel_enhancement() {
+
 
 }
 

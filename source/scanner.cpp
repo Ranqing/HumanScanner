@@ -88,14 +88,14 @@ void HumanBodyScanner::load_and_crop_images()
 
     //load masks
     if(false == qing_load_image(m_msk_nameL, CV_LOAD_IMAGE_GRAYSCALE, full_mskL) ||
-       false == qing_load_image(m_msk_nameR, CV_LOAD_IMAGE_GRAYSCALE, full_mskR)) {
+            false == qing_load_image(m_msk_nameR, CV_LOAD_IMAGE_GRAYSCALE, full_mskR)) {
         cout << "no masks here..." << endl;
         m_mskL = Mat(m_size, CV_8UC1, cv::Scalar(255));
         m_mskR = Mat(m_size, CV_8UC1, cv::Scalar(255));
     }
     else {
-//        threshold(full_mskL, full_mskL, 75, 255, THRESH_BINARY);
-//        threshold(full_mskR, full_mskR, 75, 255, THRESH_BINARY);
+        //        threshold(full_mskL, full_mskL, 75, 255, THRESH_BINARY);
+        //        threshold(full_mskR, full_mskR, 75, 255, THRESH_BINARY);
 
         qing_threshold_msk(full_mskL, full_mskL, 128, 255);
         qing_threshold_msk(full_mskR, full_mskR, 128, 255);
@@ -247,8 +247,8 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_rematch_infos(p);
 #endif
-        continue;
 
+# if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                           upsampling expanded pixels using guidiance filter                        */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -263,6 +263,7 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_upsamling_infos(p);
 #endif
+# endif
 
 # if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -285,7 +286,7 @@ void HumanBodyScanner::match()
         /*                                         disparity refinement : region voting                                       */
         /*--------------------------------------------------------------------------------------------------------------------*/
         printf("\n\tdisparity general refinment...region voting...%d times\n", REGION_VOTE_TIMES);
-        m_stereo_pyramid[0]->init_region_voter();
+        m_stereo_pyramid[p]->init_region_voter();
         for(int t = 0; t < REGION_VOTE_TIMES; ++t) {
             duration = (double)getTickCount();
             m_stereo_pyramid[p]->check_outliers_l();                  //occlusion: 1(Red);   Mismatch: 2(Green)
@@ -313,11 +314,11 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_median_infos(p);
 #endif
-
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                             save results                                                           */
         /*--------------------------------------------------------------------------------------------------------------------*/
         m_debugger->save_final_infos(p);
+        continue;
 
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                             subpixel: interplotaion                                                */

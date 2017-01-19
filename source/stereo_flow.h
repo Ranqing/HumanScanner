@@ -45,6 +45,7 @@ private:
     vector<uchar> m_outliers_l, m_outliers_r;
 
     Mat m_rgb_view_l, m_rgb_view_r;          //bgr uchar image
+    Mat m_mat_mask_l, m_mat_mask_r;
 
 #if 1
     //blur size == DEFAULT_NCC_WND
@@ -127,6 +128,9 @@ public:
     int get_h() { return m_h; }
     int get_disp_range()  { return m_disp_ranges; }
 
+    Mat get_mat_mask_l()  { return m_mat_mask_l; }
+    Mat get_mat_mask_r()  { return m_mat_mask_r; }
+
     vector<int>& get_bestk_l() { return m_best_k_l; }
     vector<int>& get_bestk_r() { return m_best_k_r; }
     vector<float>& get_best_mcost_l() { return m_best_mcost_l; }
@@ -158,6 +162,10 @@ inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL,
     //rgb uchar image
     imgL.convertTo(m_rgb_view_l, CV_8UC3, 255);
     imgR.convertTo(m_rgb_view_r, CV_8UC3, 255);
+
+    //mask
+    m_mat_mask_l = mskL.clone();
+    m_mat_mask_r = mskR.clone();
 
     //gray
     m_gray_l.resize(m_total);
