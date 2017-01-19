@@ -244,11 +244,25 @@ void HumanBodyScanner::match()
         printf( "\n\t--------------------------------------------------------\n" );
         printf( "\trematch: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
         printf( "\t--------------------------------------------------------\n" );
-        m_stereo_pyramid[p]->check_outliers();
 #if DEBUG
         m_debugger->save_rematch_infos(p);
 #endif
         continue;
+
+        /*--------------------------------------------------------------------------------------------------------------------*/
+        /*                                           upsampling expanded pixels using guidiance filter                        */
+        /*--------------------------------------------------------------------------------------------------------------------*/
+        //@add by ranqing : 20170119
+        printf("\n\tumsampling expanded disparities using guidiance filter ...\n");
+        duration = (double)getTickCount();
+        m_stereo_pyramid[p]->upsampling_using_rbf();
+        m_stereo_pyramid[p]->cross_validation();
+        printf( "\n\t--------------------------------------------------------\n" );
+        printf( "\tupsampling: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
+        printf( "\t--------------------------------------------------------\n" );
+#if DEBUG
+        m_debugger->save_upsamling_infos(p);
+#endif
 
 # if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -271,9 +285,11 @@ void HumanBodyScanner::match()
         /*                                         disparity refinement : region voting                                       */
         /*--------------------------------------------------------------------------------------------------------------------*/
         printf("\n\tdisparity general refinment...region voting...%d times\n", REGION_VOTE_TIMES);
+        m_stereo_pyramid[0]->init_region_voter();
         for(int t = 0; t < REGION_VOTE_TIMES; ++t) {
             duration = (double)getTickCount();
-            m_stereo_pyramid[p]->check_outliers();                  //occlusion: 1(Red);   Mismatch: 2(Green)
+            m_stereo_pyramid[p]->check_outliers_l();                  //occlusion: 1(Red);   Mismatch: 2(Green)
+            m_stereo_pyramid[p]->check_outliers_r();
             m_stereo_pyramid[p]->region_voting();
             printf( "\t--------------------------------------------------------\n" );
             printf( "\tregion voting: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
@@ -336,6 +352,28 @@ void HumanBodyScanner::copy_disp_from_stereo() {
     qing_vec_2_img<float>(disp_vec_l, m_dispL);
     qing_vec_2_img<float>(disp_vec_r, m_dispR);
     qing_vec_2_img<float>(disp_vec, m_disp);
+
+# if 0
+    Mat disp_img_l(m_size, CV_8UC1);
+    Mat disp_img_r(m_size, CV_8UC1);
+    Mat disp_img(m_size, CV_8UC1);
+    float scale = m_stereo_pyramid[0]->get_scale();
+    m_dispL.convertTo(disp_img_l, CV_8UC1, scale);
+    m_dispR.convertTo(disp_img_r, CV_8UC1, scale );
+    m_disp.convertTo(disp_img, CV_8UC1, scale);
+
+    Mat small_disp_l, small_disp_r, small_disp;
+
+    Size dsize = Size(0.25 * m_size.width, 0.25 * m_size.height);
+    resize(disp_img_l, small_disp_l, dsize);
+    imshow("disp_l", small_disp_l);
+    resize(disp_img_r, small_disp_r, dsize);
+    imshow("disp_r", small_disp_r);
+    resize(disp_img, small_disp, dsize);
+    imshow("disp", small_disp);
+    waitKey(0);
+    destroyAllWindows();
+#endif
 }
 
 void HumanBodyScanner::disp_2_depth(const Mat &dsp, const Mat &msk, const Mat &img, vector<Vec3f> &points, vector<Vec3f> &colors) {
@@ -348,7 +386,8 @@ void HumanBodyScanner::disp_2_depth(const Mat &dsp, const Mat &msk, const Mat &i
     int w = m_size.width;
     int h = m_size.height;
 
-    points.reserve(w*h);  colors.reserve(w*h);
+    points.reserve(w*h);
+    colors.reserve(w*h);
 
     for(int y = 0; y < h; ++y) {
         for(int x = 0; x < w; ++x) {
@@ -368,6 +407,12 @@ void HumanBodyScanner::disp_2_depth(const Mat &dsp, const Mat &msk, const Mat &i
 
                 points.push_back( Vec3f(xyzw[0]/xyzw[3], xyzw[1]/xyzw[3], xyzw[2]/xyzw[3]) );
                 colors.push_back( Vec3f(ptr_rgb[3*index + 0], ptr_rgb[3*index + 1], ptr_rgb[3*index + 2]) );
+# if 0
+                cout << uvd1[0] << ' ' << uvd1[1] << ' ' << uvd1[2] << ' ' << uvd1[3] << endl;
+                cout << m_qmatrix << endl;
+                cout << xyzw[0] << ' ' << xyzw[1] << ' ' << xyzw[2] << ' ' << xyzw[3] << endl;
+                cout << points[points.size() - 1] << "\tgetchar(): " << getchar() << endl;
+# endif
             }
         }
     }
@@ -379,37 +424,18 @@ void HumanBodyScanner::triangulate() {
     int w = m_size.width;
     int h = m_size.height;
 
-    Mat erode_mskL = qing_erode_image(m_mskL, 20);
-    Mat erode_mskR = qing_erode_image(m_mskR, 20);
-    Mat erode_msk  = erode_mskL.clone();
+    Mat erode_msk  = qing_erode_image(m_mskL, 20);
 
     float * ptr_disp = (float *)m_disp.ptr<float>(0);
-    uchar * ptr_mskL = (uchar *)erode_mskL.ptr<uchar>(0);
-    uchar * ptr_mskR = (uchar *)erode_mskR.ptr<uchar>(0);
     uchar * ptr_msk  = (uchar *)erode_msk.ptr<uchar>(0);
-
-    //preparing mask, common mask, maybe cross-check is enough
-    for(int y = 0; y < h; ++y) {
-        for(int x = 0; x < w; ++x)  {
-            int index = y * w + x;
-            if( 255 == ptr_mskL[index] )
-            {
-                int d = (int)( ptr_disp[index] + 0.5 );
-                if(d == 0)  ptr_msk[index] = ptr_mskL[index];
-                else  {
-                    if( 255 == ptr_mskR[index - d] ) ptr_msk[index] = ptr_mskL[x];
-                }
-            }
-        }
-    }
 
     //preparing disparity
     float offset = m_crop_pointL.x - m_crop_pointR.x;
-    for(int y = 0; y < h; ++y) {
+    for(int y = 0, index = 0; y < h; ++y) {
         for(int x = 0; x < w; ++x) {
-            int index = y * w + x;
-            if( 255 == ptr_msk[index] )  ptr_disp[index] += offset;
+            if( 255 == ptr_msk[index] && 0 != (int)ptr_disp[index] )  ptr_disp[index] += offset;
             else  ptr_disp[index] = 0.f;
+            index ++;
         }
     }
 

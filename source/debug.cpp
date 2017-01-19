@@ -167,6 +167,23 @@ void Debugger::save_rematch_infos(const int level) {
     cout << "debug:\tsaving " << save_fn << endl;
 }
 
+void Debugger::save_upsamling_infos(const int level) {
+    Mat disp_l, disp_r, disp;
+    get_disp_datas(disp_l, disp_r, disp);
+
+    string str = int2string(level);
+    string save_fn_l = m_save_dir + "/upsamling_disp_l_" + str + ".jpg";
+    string save_fn_r = m_save_dir + "/upsamling_disp_r_"  + str + ".jpg";
+    string save_fn   = m_save_dir + "/upsamling_disp_" + str + ".jpg";
+
+    save_disp_data(save_fn_l, disp_l);
+    cout << "debug:\tsaving " << save_fn_l << endl;
+    save_disp_data(save_fn_r, disp_r);
+    cout << "debug:\tsaving " << save_fn_r << endl;
+    save_disp_data(save_fn, disp);
+    cout << "debug:\tsaving " << save_fn << endl;
+}
+
 void Debugger::save_so_infos(const int level) {
     Mat disp_l, disp_r, disp;
     get_disp_datas(disp_l, disp_r, disp);

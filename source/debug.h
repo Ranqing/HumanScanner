@@ -15,6 +15,7 @@ public:
     void save_seed_infos(const int level);
     void save_prop_infos(const int level);
     void save_rematch_infos(const int level);
+    void save_upsamling_infos(const int level);
     void save_so_infos(const int level);
     void save_rv_infos(const int level);
     void save_median_infos(const int level);

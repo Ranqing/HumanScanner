@@ -7,9 +7,9 @@
 #include "aggr_method.h"
 #include "match.h"
 #include "match_value.h"
+#include "region_voting.h"
 
 class MatchHash;
-class RegionVoter;
 
 const float c_thresh_zncc  = 0.95;	//0.85,1.15
 const float c_thresh_prior = 1.35;
@@ -26,8 +26,6 @@ public:
 
     void calc_mean_images();    //for zncc calculation in stereo_flow class
     void calc_support_region();
-    //    m_stereo_pyramid[p]->set_patch_params(wnd_sz + 2);
-    //    m_stereo_pyramid[p]->calc_borders();
 
     void calc_cost_vol();
     void aggr_cost_vol();
@@ -44,6 +42,9 @@ private:
     vector<float> m_best_mcost, m_best_mcost_l, m_best_mcost_r;                          //best matching cost datas
     vector<float> m_best_prior, m_best_prior_l, m_best_prior_r;                          //best prior datas
     vector<int> m_best_k, m_best_k_l, m_best_k_r;                                        //best disp discrete level
+    vector<uchar> m_outliers_l, m_outliers_r;
+
+    Mat m_rgb_view_l, m_rgb_view_r;          //bgr uchar image
 
 #if 1
     //blur size == DEFAULT_NCC_WND
@@ -58,7 +59,6 @@ private:
     RegionVoter * m_region_voter;
 
     //ScanlineOptimizer * m_scanline_optimizer;
-
     //scanline optimization
     //    float m_pi1, m_pi2;
     //    int m_tau_so;                   //params for scanline optimization
@@ -90,15 +90,24 @@ public:
     void copy_disp_2_disp_l();
     void copy_disp_2_disp_r();
     void calc_rematch_borders(const vector<float>& disp, const vector<uchar>& mask, const int scanline, vector<int>& border0, vector<int>& border1);
-    void re_match_l();                                                                 //fill in unexpanded pixels
+    void re_match_l();                                                                                  //fill in unexpanded pixels
     void re_match_r();
+
+    //fill in unexpanded pixels using guidance filter
+    void upsampling_using_rbf();
+    void upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& mask, vector<float>& disp);
 
 #if 0
     void scanline_optimize(const int direction);
 #endif
 
-    void check_outliers();
+    void check_outliers_l();
+    void check_outliers_r();
+    void init_region_voter();
     void region_voting();
+    void region_voting(const int direction, const vector<uchar>& mask, vector<float>& disp,
+                       vector<int>& best_k, vector<float>& best_mcost, vector<float>& best_prior,
+                       vector<uchar>& outliers);
 
     void median_filter();
     void subpixel_enhancement();
@@ -116,18 +125,16 @@ public:
     float get_scale() { return m_scale; }
     int get_w() { return m_w; }
     int get_h() { return m_h; }
-
-# if 1
     int get_disp_range()  { return m_disp_ranges; }
-    vector<float>& get_mcost_l(const int k) { return m_cost_vol_l[k];}
-    vector<float>& get_mcost_r(const int k) { return m_cost_vol_r[k];}
+
     vector<int>& get_bestk_l() { return m_best_k_l; }
     vector<int>& get_bestk_r() { return m_best_k_r; }
     vector<float>& get_best_mcost_l() { return m_best_mcost_l; }
     vector<float>& get_best_mcost_r() { return m_best_mcost_r; }
     vector<float>& get_best_prior_l() { return m_best_prior_l; }
     vector<float>& get_best_prior_r() { return m_best_prior_r; }
-# endif
+    vector<float>& get_mcost_l(const int k) { return m_cost_vol_l[k];}
+    vector<float>& get_mcost_r(const int k) { return m_cost_vol_r[k];}
 };
 
 inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL, const Mat &mskR, const float &max_disp, const float &min_disp, const float scale):
@@ -147,6 +154,10 @@ inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL,
     m_view_r.resize(m_total * 3);
     memcpy(&m_view_l.front(), imgL.data, sizeof(float)*m_total*3);
     memcpy(&m_view_r.front(), imgR.data, sizeof(float)*m_total*3);
+
+    //rgb uchar image
+    imgL.convertTo(m_rgb_view_l, CV_8UC3, 255);
+    imgR.convertTo(m_rgb_view_r, CV_8UC3, 255);
 
     //gray
     m_gray_l.resize(m_total);
@@ -201,6 +212,7 @@ inline StereoFlow::StereoFlow() {
 inline StereoFlow::~StereoFlow() {
 
     if(NULL != m_support_region) { delete m_support_region;   m_support_region = NULL; }
+    if(NULL != m_region_voter) { delete m_region_voter;  m_region_voter = NULL; }
 
 }
 

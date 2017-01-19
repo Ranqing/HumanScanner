@@ -29,6 +29,8 @@ file(GLOB PROJECT_FILES
   "features/*.cpp"
   "hashmap/*.h"
   "hashmap/*.cpp"
+  "qx_upsampling/*.h"
+  "qx_upsampling/*.cpp"
 )
 
 if(WITH_OPENCV)

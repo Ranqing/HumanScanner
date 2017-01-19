@@ -5,6 +5,7 @@
 #include "aggr/bf_aggr.h"
 #include "aggr/box_aggr.h"
 #include "aggr/gf_aggr.h"
+#include "qx_upsampling/qx_zdepth_upsampling_using_rbf.h"
 #include "hashmap.h"
 
 #include "../../../Qing/qing_disp.h"
@@ -766,8 +767,196 @@ void StereoFlow::re_match_r() {
     }
 }
 
-void StereoFlow::check_outliers() {
+void StereoFlow::upsampling_using_rbf() {
+    cout << "\tupsampling left disparities..." ;
+    upsampling_using_rbf(m_rgb_view_l, m_mask_l, m_disp_l);
+    cout << "done..." << endl;
+    cout << "\tupsamling right disparities...";
+    upsampling_using_rbf(m_rgb_view_r, m_mask_r, m_disp_r);
+    cout << "done..." << endl;
+}
 
+void StereoFlow::upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& mask, vector<float>& disp) {
+
+    float sigma_spatial = 0.005f;
+    float sigma_range = 0.1f;
+
+    vector<uchar> guidance(m_total * 3);
+    vector<uchar> gradient_x(m_total), gradient_y(m_total);                                                                                     //color image gradients
+    vector<float> out(m_total), in(m_total), temp(m_total), temp_2w(2*m_w), ones(m_total), ones_temp(m_total), ones_temp_2w(2*m_w);             //disparity
+
+    //rgb image as guidance
+    memcpy(&guidance.front(),rgb_view.data, sizeof(uchar)*m_total*3);
+    memset(&in.front(), 0, sizeof(float)*m_total);
+    copy(disp.begin(), disp.end(), in.begin());
+    for(int idx = 0; idx < m_total; ++idx) {
+        if(0==mask[idx]) continue;
+        if(5.f > in[idx]) in[idx] = 0.f;
+    }
+
+    qx_zdepth_upsampling_using_rbf(&out[0], &in[0], &guidance[0], &temp[0], &temp_2w[0], &gradient_x[0], &gradient_y[0],
+            &ones[0], &ones_temp[0], &ones_temp_2w[0], m_h, m_w, sigma_spatial, sigma_range);
+
+
+    memset(&disp.front(), 0.f, sizeof(float)*m_total);
+    for(int idx = 0; idx < m_total; idx++) {
+        if(0==mask[idx]) continue;
+        else  disp[idx] = out[idx];
+    }
+# if 1
+    Mat disp_img(m_h, m_w, CV_8UC1);
+    qing_float_vec_2_uchar_img(disp, m_scale, disp_img);
+    imshow("test_unsampling_using_rbf", disp_img);
+    waitKey(0);
+    destroyWindow("test_upsampling_using_rbf");
+# endif
+}
+
+void StereoFlow::check_outliers_l() {
+    m_outliers_l.clear(); m_outliers_l.resize(m_total, 0);
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_l[idx]) { idx++; continue; }
+
+            float d_l = m_disp_l[idx];
+            int rx = x - d_l;
+            int ridx = idx - d_l;
+
+            if( 0 > rx || (0 <= rx && rx < m_w && abs(d_l - m_disp_r[ridx]) > DISP_TOLERANCE) ) {
+                bool is_occluded = true;
+                for(int k = 0; k <= m_disp_ranges; ++k) {
+                    float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+                    if((x-d) >= 0 && d == m_disp_r[ridx]) {
+                        is_occluded = false;
+                        break;
+                    }
+                }
+                m_outliers_l[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
+            }
+            idx++;
+        }
+    }
+# if 1
+    Mat disp(m_h, m_w, CV_32FC1);
+    Mat disp_img(m_h, m_w, CV_8UC1);
+    qing_vec_2_img<float>(m_disp_l, disp);
+    disp.convertTo(disp_img, CV_8UC1, m_scale);
+# endif
+}
+
+void StereoFlow::check_outliers_r() {
+    m_outliers_r.clear(); m_outliers_r.resize(m_total, 0);
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(m_mask_r[idx]==0) {idx++; continue;}
+
+            float d_r = m_disp_r[idx];
+            int lx = x + d_r;
+            int lidx = idx + d_r;
+
+            if( m_w <= lx || (m_w > lx && abs(d_r - m_disp_l[lidx]) > DISP_TOLERANCE) ) {
+                bool is_occluded = true;
+                for(int k = 0; k <= m_disp_ranges; ++k) {
+                    float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+                    if((x+d) <= m_w && d==m_disp_l[lidx]) {
+                        is_occluded = false;
+                        break;
+                    }
+                }
+                m_outliers_r[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
+            }
+            idx ++;
+        }
+    }
+}
+
+void StereoFlow::init_region_voter() {
+    m_region_voter = new RegionVoter();
+    cout << "\n\tregion voting. min_vote_count = " << m_region_voter->get_min_vote_count()
+         << ", min_vote_ratio = " << m_region_voter->get_min_vote_ratio() << endl;
+}
+
+void StereoFlow::region_voting() {
+    region_voting(0, m_mask_l, m_disp_l, m_best_k_l, m_best_mcost_l, m_best_prior_l, m_outliers_l);
+    region_voting(1, m_mask_r, m_disp_r, m_best_k_r, m_best_mcost_r, m_best_prior_r, m_outliers_r);
+}
+
+void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, vector<float>& disp,
+                               vector<int>& best_k, vector<float>& best_mcost, vector<float>& best_prior,
+                               vector<uchar>& outliers) {
+    vector<float> res_disp(m_total, 0.f); copy(disp.begin(), disp.end(), res_disp.begin());
+    vector<int> res_best_k(m_total, 0.f); copy(best_k.begin(), best_k.end(), best_k.begin());
+    vector<float> res_best_mcost(m_total, -1.f); copy(best_mcost.begin(), best_mcost.end(), best_mcost.begin());
+    vector<float> res_best_prior(m_total, 0.f);  copy(best_prior.begin(), best_prior.end(), best_prior.begin());
+
+    vector<int>& borders_u = direction ? m_support_region->get_u_borders_r() : m_support_region->get_u_borders_l();
+    vector<int>& borders_d = direction ? m_support_region->get_d_borders_r() : m_support_region->get_d_borders_l();
+    vector<int>& borders_l = direction ? m_support_region->get_l_borders_r() : m_support_region->get_l_borders_l();
+    vector<int>& borders_r = direction ? m_support_region->get_r_borders_r() : m_support_region->get_r_borders_l();
+
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==mask[idx] || 0==outliers[idx]) {idx++;continue;}
+
+            vector<float> disp_hist(m_disp_ranges+1, 0.f);
+            int lborder = borders_l[idx];
+            int rborder = borders_r[idx];
+            int votes = 0;
+
+            for(int dx = lborder; dx <= rborder; ++dx) {
+                int cur_x = x + dx;
+                if(0>cur_x || m_w <= cur_x) continue;
+
+                int cur_idx = idx + dx;
+                int uborder = borders_u[cur_idx];
+                int dborder = borders_d[cur_idx];
+
+                for(int dy = uborder; dy <= dborder; ++dy) {
+                    int cur_y = y + dy;
+                    if(0>cur_y || m_h <= cur_y) continue;
+
+                    cur_idx = cur_idx + dy * m_w;
+                    if(0==mask[cur_idx] || 0.f == disp[cur_idx]) continue;
+                    if(0!=outliers[cur_idx]) continue;
+
+                    float d = disp[cur_idx];
+                    int k = qing_disp_2_k(m_max_disp, m_min_disp, d);
+                    votes++;
+                    disp_hist[k]++;
+                }
+            }
+
+            // is the number of vote sufficient
+            // not sufficient;
+            if(votes <= m_region_voter->get_min_vote_count()) {idx++;continue;}
+
+            float new_d = disp[idx];
+            int new_best_k = 0;
+            int max_vote_cnt = 0;
+            // float vote_ratio = 0.f, max_vote_ratio = 0.f;
+            for(int k = 0; k < m_disp_ranges; ++k) {
+                int vote_cnt = disp_hist[k];
+                if(vote_cnt > max_vote_cnt) {
+                    max_vote_cnt = vote_cnt;
+                    new_best_k = k;
+                    new_d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+                }
+                disp_hist[k] = 0;
+            }
+
+            outliers[idx] = 0;
+            res_disp[idx] = new_d;
+            res_best_k[idx] = new_best_k;
+            res_best_mcost[idx] = c_thresh_e_zncc;
+            res_best_prior[idx] = 1.f;
+            idx ++;
+        }
+    }
+
+    copy(res_disp.begin(), res_disp.end(), disp.begin());
+    copy(res_best_k.begin(), res_best_k.end(), best_k.begin());
+    copy(res_best_mcost.begin(), res_best_mcost.end(), best_mcost.begin());
+    copy(res_best_prior.begin(), res_best_prior.end(), best_prior.begin());
 }
 
 void StereoFlow::median_filter() {

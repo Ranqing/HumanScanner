@@ -27,6 +27,16 @@ public:
 
     int calc_border(const vector<float>& img, const vector<uchar>& msk, const int x, const int y, const int dx, const int dy);
 
+    vector<int>& get_u_borders_l() { return m_u_borders_l; }
+    vector<int>& get_d_borders_l() { return m_d_borders_l; }
+    vector<int>& get_l_borders_l() { return m_l_borders_l; }
+    vector<int>& get_r_borders_l() { return m_r_borders_l; }
+    vector<int>& get_u_borders_r() { return m_u_borders_r; }
+    vector<int>& get_d_borders_r() { return m_d_borders_r; }
+    vector<int>& get_l_borders_r() { return m_l_borders_r; }
+    vector<int>& get_r_borders_r() { return m_r_borders_r; }
+
+
 private:
     //params in paper of cross shaped region
     int m_tau1, m_tau2, m_dis1, m_dis2;
@@ -37,7 +47,7 @@ private:
 
     //cross shaped region
     vector<int> m_u_borders_l, m_d_borders_l, m_l_borders_l, m_r_borders_l;
-    vector<int> m_u_boarder_r, m_d_borders_r, m_l_borders_r, m_r_borders_r;
+    vector<int> m_u_borders_r, m_d_borders_r, m_l_borders_r, m_r_borders_r;
 };
 
 

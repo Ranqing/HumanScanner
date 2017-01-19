@@ -21,7 +21,7 @@ void CrossShapedRegion::calc_patch_borders(const vector<float> &imgL, const vect
 
     cout << "\n\tcalculate boarders of cross shaped region.." ;
     double duration = (double)getTickCount();
-    cout << "up.." ;       calc_patch_borders(imgL, mskL,  0, -1, m_u_borders_l); calc_patch_borders(imgR, mskR, 0, -1, m_u_boarder_r);
+    cout << "up.." ;       calc_patch_borders(imgL, mskL,  0, -1, m_u_borders_l); calc_patch_borders(imgR, mskR, 0, -1, m_u_borders_r);
     cout << "down..";      calc_patch_borders(imgL, mskL,  0,  1, m_d_borders_l); calc_patch_borders(imgR, mskR, 0,  1, m_d_borders_r);
     cout << "left..";      calc_patch_borders(imgL, mskL, -1,  0, m_l_borders_l); calc_patch_borders(imgR, mskR, -1, 0, m_l_borders_r);
     cout << "right..";     calc_patch_borders(imgL, mskL,  1,  0, m_r_borders_l); calc_patch_borders(imgR, mskR,  1, 0, m_r_borders_r);
