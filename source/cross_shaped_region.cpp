@@ -73,7 +73,7 @@ void CrossShapedRegion::calc_patch_borders(const vector<float> &img, const vecto
     border.resize(m_w*m_h);
     memset(&border.front(), -1, sizeof(int)*m_w*m_h);
 
-#pragma omp parallel for
+//#pragma omp parallel for
     for(int y = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
             int index = y * m_w + x;

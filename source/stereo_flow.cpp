@@ -176,8 +176,8 @@ void StereoFlow::calc_init_disparity() {                                        
     m_cost_vol_r.resize(m_disp_ranges + 1);
 
     for(int k = 0; k <= m_disp_ranges; ++k) {
-        m_cost_vol_l[k].resize(m_total); memset(&m_cost_vol_l[k].front(), 0, sizeof(float)*m_total);
-        m_cost_vol_r[k].resize(m_total); memset(&m_cost_vol_r[k].front(), 0, sizeof(float)*m_total);
+        m_cost_vol_l[k].resize(m_total); memset(&m_cost_vol_l[k].front(), 0.f, sizeof(float)*m_total);
+        m_cost_vol_r[k].resize(m_total); memset(&m_cost_vol_r[k].front(), 0.f, sizeof(float)*m_total);
     }
 
     m_cost_mtd = set_cost_type(CCNAME);
@@ -210,6 +210,8 @@ void StereoFlow::calc_cluster_costs_l(const int st_k, const int ed_k, const int 
 
     for(int k = st_k; k <= ed_k; ++k) {
         float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+        if(m_min_disp > d || m_max_disp < d) continue;
+
         int ry = ly;
         int rx = lx - d;
         int r_cen_idx = ry * m_w + rx;
@@ -255,6 +257,8 @@ void StereoFlow::calc_cluster_costs_r(const int st_k, const int ed_k, const int 
 
     for(int k = st_k; k <= ed_k; ++k) {
         float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+        if(m_min_disp > d || m_max_disp < d) continue;
+
         int ly = ry;
         int lx = rx + d;
         int l_cen_idx = ly * m_w + lx;
@@ -478,6 +482,7 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
 
         float d = t_match.get_d(), lx, ly, rx, ry;
         int k = qing_disp_2_k(m_max_disp, m_min_disp, d);
+        if(0>k || m_disp_ranges<k) continue;
 
         if(0==direction) {
             lx = t_match.get_x(); ly = t_match.get_y();
@@ -515,7 +520,7 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
 
                 if(0==m_mask_l[cur_l_idx] || 0==m_mask_r[cur_r_idx]) continue;
 
-                vector<float> mcosts(2*offset + 1, 0.f);
+                vector<float> mcosts(2*offset + 1, -1.f);
 
                 if(0==direction)
                     calc_cluster_costs_l(k-1, k+1, cur_lx, cur_ly, mcosts);
@@ -988,11 +993,11 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
     for(int y = 0, idx = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
 
-            if(0==mask[idx] || 0==outliers[idx]) {idx++;continue;}
+            if(0==mask[idx] || 0==outliers[idx]) {idx++; continue;}
 
             vector<float> disp_hist(m_disp_ranges+1, 0.f);
-            int lborder = borders_l[idx];
-            int rborder = borders_r[idx];
+            int lborder = -borders_l[idx];
+            int rborder =  borders_r[idx];
             int votes = 0;
 
             for(int dx = lborder; dx <= rborder; ++dx) {
@@ -1000,8 +1005,8 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
                 if(0>cur_x || m_w <= cur_x) continue;
 
                 int cur_idx = idx + dx;
-                int uborder = borders_u[cur_idx];
-                int dborder = borders_d[cur_idx];
+                int uborder = -borders_u[cur_idx];
+                int dborder =  borders_d[cur_idx];
 
                 for(int dy = uborder; dy <= dborder; ++dy) {
                     int cur_y = y + dy;
@@ -1009,12 +1014,13 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
 
                     cur_idx = cur_y * m_w + cur_x;
 
-                    if(0==mask[cur_idx] || 0.f == res_disp[cur_idx]) continue;        //invalid pixels can not to vote
+                    if(0==mask[cur_idx] || 0.f==res_disp[cur_idx]) continue;        //invalid pixels can not to vote
                     if(0!=outliers[cur_idx]) continue;                                //outliers can not to vote
 
                     float d = res_disp[cur_idx];
                     int k = qing_disp_2_k(m_max_disp, m_min_disp, d);
 
+                    if(0>k || disp_hist.size() <= k) { /*cout << "k=" << k << endl;*/ continue;}
                     votes++;
                     disp_hist[k]++;
                 }
@@ -1022,14 +1028,15 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
 
             // is the number of vote sufficient
             // not sufficient;
-            if(m_region_voter->get_vote_count_thresh() >= votes) {idx++;continue;}
+            if(m_region_voter->get_vote_count_thresh() >= votes) {idx++; continue;}
 
-            float new_d = disp[idx];
+            float new_d = res_disp[idx];  // cout << "yes. " << votes << endl;
+
             int new_best_k = 0, max_vote_cnt = 0;
             // float vote_ratio = 0.f, max_vote_ratio = 0.f;
             for(int k = 0; k <= m_disp_ranges; ++k) {
                 int vote_cnt = disp_hist[k];
-                //   cout << "k = " << k << ", vote_cnt = " << vote_cnt << endl;
+                //  cout << "k = " << k << ", vote_cnt = " << vote_cnt << endl;
                 if(vote_cnt > max_vote_cnt) {
                     max_vote_cnt = vote_cnt;
                     new_best_k = k;
@@ -1044,10 +1051,8 @@ void StereoFlow::region_voting(const int direction, const vector<uchar>& mask, v
             res_best_mcost[idx] = c_thresh_e_zncc;
             res_best_prior[idx] = c_thresh_e_prior;
             idx ++;
-
         }
     }
-
     copy(res_disp.begin(), res_disp.end(), disp.begin());
     copy(res_best_k.begin(), res_best_k.end(), best_k.begin());
     copy(res_best_mcost.begin(), res_best_mcost.end(), best_mcost.begin());

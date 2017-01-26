@@ -5,8 +5,11 @@
 #include <vector>
 using namespace std;
 
-#define TAUS 5
-#define TAUH 0.4f
+//#define TAUS 5
+//#define TAUH 0.4f
+
+#define MIN_VOTES_COUNT 5
+#define MIN_VOTES_RATIO 0.4f
 
 class RegionVoter
 {
@@ -19,11 +22,11 @@ public:
 
 private:
      int m_taus;                                    //区域内最少票数
-     //vector<int> m_dist_hist;                       //histogram of disparites to record votes
+     //vector<int> m_dist_hist;                     //histogram of disparites to record votes
      float m_tauh;                                  //最高票数最少占比
 };
 
-inline RegionVoter::RegionVoter():m_taus(TAUS), m_tauh(TAUH) {
+inline RegionVoter::RegionVoter():m_taus(MIN_VOTES_COUNT), m_tauh(MIN_VOTES_RATIO) {
     cout << "\tinitialization of region voter..." << endl;
 
 }

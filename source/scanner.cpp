@@ -295,6 +295,7 @@ void HumanBodyScanner::match()
             m_stereo_pyramid[p]->check_outliers_l();                  //occlusion: 1(Red);   Mismatch: 2(Green)
             m_stereo_pyramid[p]->check_outliers_r();
             m_stereo_pyramid[p]->region_voting();
+
             printf( "\t--------------------------------------------------------\n" );
             printf( "\tregion voting: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
             printf( "\t--------------------------------------------------------\n" );
@@ -321,7 +322,9 @@ void HumanBodyScanner::match()
         /*                                             save results                                                           */
         /*--------------------------------------------------------------------------------------------------------------------*/
         m_debugger->save_final_infos(p);
-        continue;
+        printf( "\t--------------------------------------------------------\n" );
+        printf( "\tend of stereo matching in level %d\n", p);
+        printf( "\t--------------------------------------------------------\n\n" );
 
 #if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
