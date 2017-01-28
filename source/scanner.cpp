@@ -30,7 +30,8 @@ bool HumanBodyScanner::init()
     fin >> m_max_disp;
     fin >> m_min_disp;
 
-    m_max_disp = 400;                                       //for guarantee
+    //m_max_disp = 640;                                       //for guarantee
+    cout << m_max_disp << '\t' << '~' << '\t' << m_min_disp << endl;
 
     m_qmatrix = Mat::zeros(4, 4, CV_64FC1);
     double * ptr = (double *)m_qmatrix.ptr<double>(0);

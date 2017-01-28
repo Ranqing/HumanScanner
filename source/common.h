@@ -15,7 +15,7 @@
 #define DISP_TOLERANCE 0
 #define REGION_VOTE_TIMES 3
 
-#define MAX_LEVELS 5
+#define MAX_LEVELS 4
 
 #define K2DISP(maxd,mind,k)		(((mind)*(1-(k)) + (maxd)*(k))/((maxd)- (mind)))    //离散级数到视差值的换算, d(k) = (dmin*(1-k) + dmax*(k)) / (dmax-dmin)
 #define DISP2K(maxd,mind,d)		((d) - (mind)/((maxd)-(mind)))                      //视差值换算到离散级数
