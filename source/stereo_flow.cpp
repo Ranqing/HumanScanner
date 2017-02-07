@@ -407,6 +407,7 @@ void StereoFlow::cross_validation() {
 
             int idx_r = idx_l - m_disp_l[idx_l];
 
+            if(0>idx_r||m_total<=idx_r) continue;
             if(0==m_mask_r[idx_r] || 0==m_disp_r[idx_r]) continue;
 
             if( m_disp_l[idx_l] == m_disp_r[idx_r]) {
