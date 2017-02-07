@@ -830,7 +830,7 @@ void StereoFlow::upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& 
 # endif
 }
 
-void StereoFlow::check_outliers_l() {
+/*void StereoFlow::check_outliers_l() {
     m_outliers_l.clear(); m_outliers_l.resize(m_total, 0);
     for(int y = 0, idx = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
@@ -882,9 +882,9 @@ void StereoFlow::check_outliers_l() {
     waitKey(0);
     destroyWindow("test_outliers_l");
 # endif
-}
+}*/
 
-void StereoFlow::check_outliers_r() {
+/*void StereoFlow::check_outliers_r() {
     m_outliers_r.clear(); m_outliers_r.resize(m_total, 0);
     for(int y = 0, idx = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
@@ -906,6 +906,118 @@ void StereoFlow::check_outliers_r() {
                 m_outliers_r[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
             }
             idx ++;
+        }
+    }
+
+# if 0
+    Mat disp(m_h, m_w, CV_32FC1), disp_img(m_h, m_w, CV_8UC1), disp_rgb_img(m_h, m_w, CV_8UC3);
+    qing_vec_2_img<float>(m_disp_r, disp);
+    disp.convertTo(disp_img, CV_8UC1, m_scale);
+    cvtColor(disp_img, disp_rgb_img, CV_GRAY2BGR);
+
+    uchar * ptr_rgb = (uchar *)disp_rgb_img.ptr<uchar>(0);
+
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_r[idx] || 0==m_outliers_r[idx]) {idx++;continue;}
+            if(DISP_MISMATCH == m_outliers_r[idx]) {                 //red
+                ptr_rgb[3*idx+0] = 0; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 255;
+            }
+            else if(DISP_OCCLUSION == m_outliers_r[idx]) {           //blue
+                ptr_rgb[3*idx+0] = 255; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 0;
+            }
+            idx ++;
+        }
+    }
+
+    imshow("test_outliers_r", disp_rgb_img);
+    waitKey(0);
+    destroyWindow("test_outliers_r");
+# endif
+}*/
+
+void StereoFlow::check_outliers_l() {
+    m_outliers_l.clear(); m_outliers_l.resize(m_total, 0);
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_l[idx]) { idx++; if(m_total<=idx) break; continue; }
+
+            float d_l = m_disp_l[idx];
+            int rx = x - d_l;
+            int ridx = idx - d_l;
+
+            if( 0>rx || m_w <= rx || 0 > ridx || m_total <= ridx )   { m_outliers_l[idx] = DISP_OCCLUSION; }
+            else {
+                if(abs(d_l - m_disp_r[ridx]) > DISP_TOLERANCE) {
+                    bool is_occluded = true;
+                    for(int k = 0; k <= m_disp_ranges; ++k) {
+                        float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+                        if((x-d) >= 0 && d == m_disp_r[ridx]) {
+                            is_occluded = false;
+                            break;
+                        }
+                    }
+                    m_outliers_l[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
+                }
+            }
+            idx++; if(m_total<=idx) break;
+        }
+    }
+
+# if 0
+    Mat disp(m_h, m_w, CV_32FC1);
+    Mat disp_img(m_h, m_w, CV_8UC1);
+    Mat disp_rgb_img(m_h, m_w, CV_8UC3);
+    qing_vec_2_img<float>(m_disp_l, disp);
+    disp.convertTo(disp_img, CV_8UC1, m_scale);
+    cvtColor(disp_img, disp_rgb_img, CV_GRAY2BGR);
+
+    uchar * ptr_rgb = (uchar *)disp_rgb_img.ptr<uchar>(0);
+
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(0==m_mask_l[idx] || 0==m_outliers_l[idx]) {idx++;continue;}
+            if(DISP_MISMATCH == m_outliers_l[idx]) {                 //red
+                ptr_rgb[3*idx+0] = 0; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 255;
+            }
+            else if(DISP_OCCLUSION == m_outliers_l[idx]) {           //blue
+                ptr_rgb[3*idx+0] = 255; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 0;
+            }
+            idx ++;
+        }
+    }
+
+    imshow("test_outliers_l", disp_rgb_img);
+    waitKey(0);
+    destroyWindow("test_outliers_l");
+# endif
+}
+
+void StereoFlow::check_outliers_r() {
+    m_outliers_r.clear(); m_outliers_r.resize(m_total, 0);
+    for(int y = 0, idx = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if(m_mask_r[idx]==0) {idx++; if(m_total<=idx) break; continue;}
+
+            float d_r = m_disp_r[idx];
+            int lx = x + d_r;
+            int lidx = idx + d_r;
+
+            if( 0>lx || m_w <= lx || 0 > lidx || m_total <= lidx )   { m_outliers_r[idx] = DISP_OCCLUSION; }
+            else {
+                if( abs(d_r - m_disp_l[lidx]) > DISP_TOLERANCE ) {
+                    bool is_occluded = true;
+                    for(int k = 0; k <= m_disp_ranges; ++k) {
+                        float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
+                        if((x+d) <= m_w && d==m_disp_l[lidx]) {
+                            is_occluded = false;
+                            break;
+                        }
+                    }
+                    m_outliers_r[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
+                }
+            }
+            idx ++;if(m_total<=idx) break;
         }
     }
 
