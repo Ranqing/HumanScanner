@@ -12,6 +12,8 @@ bool HumanBodyScanner::init()
         return false;
     }
 
+    qing_cwd();
+
     fstream fin(m_stereo_file.c_str(), ios::in);
     if( false == fin.is_open() ) {
         cerr << "failed to open " << m_stereo_file << endl;

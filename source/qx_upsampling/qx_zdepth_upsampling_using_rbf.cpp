@@ -124,6 +124,7 @@ void qx_rbf(float*out, float*in, unsigned char*gradient_x, unsigned char*gradien
 		memcpy(ypy, ycy, sizeof(float)*w);
 	}
 }
+//guidance filter implemented by realtime bilteral filter
 void qx_zdepth_upsampling_using_rbf(float*out_hw, float*in_hw, unsigned char*RGB_hw3, float*temp_hw, float*temp_2w, unsigned char*gradient_x_hw, unsigned char*gradient_y_hw, float*ones, float*ones_temp, float*ones_temp_2w, int h, int w, float sigma_spatial, float sigma_range)
 {
 	unsigned char*guidance = RGB_hw3, *gradient_x = gradient_x_hw, *gradient_y = gradient_y_hw;
@@ -140,7 +141,7 @@ void qx_zdepth_upsampling_using_rbf(float*out_hw, float*in_hw, unsigned char*RGB
 	//image_display(in, h, w,1);
 	memcpy(out, in, sizeof(float)*h*w);
 	for (int i = 0; i < 1; i++)
-	{
+    {
 		qx_rbf(out, out, gradient_x, gradient_y, temp, temp_2w, h, w, sigma_spatial, sigma_range);
 		qx_rbf(ones, ones, gradient_x, gradient_y, ones_temp, ones_temp_2w, h, w, sigma_spatial, sigma_range);
 		sigma_spatial *= 0.5f;
