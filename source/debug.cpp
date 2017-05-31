@@ -1,7 +1,7 @@
 #include "debug.h"
 #include "stereo_flow.h"
 
-#include "../../../Qing/qing_image.h"
+#include "../../Qing/qing_image.h"
 
 Debugger::Debugger(const string& dir):m_save_dir(dir)  {
 }

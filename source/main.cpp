@@ -6,9 +6,9 @@ int main(int argc, char * argv[])
 //    string msk_folder  = "../../../HumanDatas_20161224/Humans_mask/" ;
 //    string stereo_folder = "../../../HumanDatas_20161224/Humans_stereo/";
 
-    string img_folder  = "../../HumanDatas_20161224/Humans_frame/";
-    string msk_folder  = "../../HumanDatas_20161224/Humans_mask/" ;
-    string stereo_folder = "../../HumanDatas_20161224/Humans_stereo/";
+    string img_folder  = "/media/ranqing/QING-WD/ZJU/HumanDatas/20161224/Humans_frame/";
+    string msk_folder  = "/media/ranqing/QING-WD/ZJU/HumanDatas/20161224/Humans_frame/" ;
+    string stereo_folder = "/media/ranqing/QING-WD/ZJU/HumanDatas/20161224/Humans_frame/";
 
     cout << "usage: " << argv[0] << " FRM_0176 stereo_A01A02.info" << endl;           //stereo
 

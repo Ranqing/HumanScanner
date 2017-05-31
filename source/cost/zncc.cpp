@@ -1,6 +1,6 @@
 #include "zncc.h"
-#include "../../../../Qing/qing_image.h"
-#include "../../../../Qing/qing_timer.h"
+#include "../../../Qing/qing_image.h"
+#include "../../../Qing/qing_timer.h"
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"

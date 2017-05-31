@@ -2,8 +2,8 @@
 #include "stereo_flow.h"
 #include "debug.h"
 
-#include "../../../Qing/qing_image.h"
-#include "../../../Qing/qing_ply.h"
+#include "../../Qing/qing_image.h"
+#include "../../Qing/qing_ply.h"
 
 bool HumanBodyScanner::init()
 {
@@ -119,6 +119,8 @@ void HumanBodyScanner::load_and_crop_images()
     imwrite(m_out_dir + "/crop_mskR.jpg", m_mskR);
 #endif
 
+    exit(1);
+
     //normalize image format and values
     cvtColor(m_imgL, m_imgL, CV_BGR2RGB);
     cvtColor(m_imgR, m_imgR, CV_BGR2RGB);
@@ -183,6 +185,10 @@ void HumanBodyScanner::build_stereo_pyramid()
         pyrDown(t_mskR, t_mskR);
         // threshold(t_mskR, t_mskR, 128, 255, THRESH_BINARY);
         qing_threshold_msk(t_mskR, t_mskR, 128, 255);
+
+        /*setting support area size*/
+        /*calculating mean image*/
+
     }
 
     cout << "\nstereo pyramid building done. max levels = " << m_max_levels << endl;
