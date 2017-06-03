@@ -35,6 +35,23 @@ public:
     void min_takes_all(const vector<uchar>& mask, const vector<vector<float> >& cost_vol,
                        vector<float>& disp, vector<int>& bestk, vector<float>& mcost, vector<float>& prior);
 
+    //2017.05.31
+    void matching_cost();
+    void beeler_disp_refinement();
+    double compute_data_item(double& ddata, double& dweight, const int& y, const int& x, const float& tstep);
+    bool compute_smooth_item(double& sdata, double& sweight, const int& y, const int& x,  const double& epsilon);
+
+    void fast_check_disp_by_depth(const float scale, Point2i crop_l, Point2i crop_r, Mat& qmatrix);
+
+private:
+    vector<vector<vector<float> > > m_hwd_costvol_l, m_hwd_costvol_r;
+    vector<float> m_view_sub_mean_l, m_view_sub_mean_r, m_shifted_view_sub_mean_r;                                  //for computing zncc
+    float *** m_ncc_vecs_l, *** m_ncc_vecs_r;
+
+    void matching_cost_from_zncc();
+
+    //end of 2017.05.31
+
 private:
     vector<float> m_view_l, m_gray_l, m_mean_l, m_view_r, m_gray_r, m_mean_r;            //image datas
     vector<uchar> m_mask_l, m_mask_r;                                                    //mask datas
@@ -44,8 +61,10 @@ private:
     vector<int> m_best_k, m_best_k_l, m_best_k_r;                                        //best disp discrete level
     vector<uchar> m_outliers_l, m_outliers_r;
 
-    Mat m_rgb_view_l, m_rgb_view_r;          //bgr uchar image
-    Mat m_mat_mask_l, m_mat_mask_r;
+    Mat m_mat_view_l, m_mat_view_r;          //rgb unsgined char [0,255]
+    Mat m_mat_gray_l, m_mat_gray_r;          //grayscale unsigned char [0,255]
+    Mat m_mat_mean_l, m_mat_mean_r;          //grayscale unsigned char [0,255]
+    Mat m_mat_mask_l, m_mat_mask_r;          //grayscale unsigned char [0,255]
 
 #if 1
     //blur size == DEFAULT_NCC_WND
@@ -113,11 +132,14 @@ public:
 
     void median_filter();
     void subpixel_enhancement();
-
     void cross_validation();
 
+public:
     void set_wnd_size(const int wnd_sz) { m_wnd_size = wnd_sz; }
     int  get_wnd_size() { return m_wnd_size; }
+
+    vector<float>& get_mean_l()     { return m_mean_l; }
+    vector<float>& get_mean_r()     { return m_mean_r; }
 
     vector<float>& get_disp_l()     { return m_disp_l; }
     vector<float>& get_disp_r()     { return m_disp_r; }
@@ -131,6 +153,8 @@ public:
 
     Mat get_mat_mask_l()  { return m_mat_mask_l; }
     Mat get_mat_mask_r()  { return m_mat_mask_r; }
+    Mat get_mat_mean_l()  { return m_mat_mean_l; }
+    Mat get_mat_mean_r()  { return m_mat_mean_r; }
 
     vector<int>& get_bestk_l() { return m_best_k_l; }
     vector<int>& get_bestk_r() { return m_best_k_r; }
@@ -140,45 +164,43 @@ public:
     vector<float>& get_best_prior_r() { return m_best_prior_r; }
     vector<float>& get_mcost_l(const int k) { return m_cost_vol_l[k];}
     vector<float>& get_mcost_r(const int k) { return m_cost_vol_r[k];}
+
 };
 
 inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL, const Mat &mskR, const float &max_disp, const float &min_disp, const float scale):
     m_max_disp(max_disp), m_min_disp(min_disp), m_scale(scale) {
 
-    Mat grayL, grayR;
-    cvtColor(imgL, grayL, CV_RGB2GRAY);
-    cvtColor(imgR, grayR, CV_RGB2GRAY);
+    //rgb view : uchar [0,255]
+    m_mat_view_l = imgL.clone();
+    m_mat_view_r = imgR.clone();
+    //gray view: uchar [0,255]
+    cvtColor(m_mat_view_l, m_mat_gray_l, CV_RGB2GRAY);
+    cvtColor(m_mat_view_r, m_mat_gray_r, CV_RGB2GRAY);
+    //mask: uchar [0,255]
+    m_mat_mask_l = mskL.clone();
+    m_mat_mask_r = mskR.clone();
 
     m_w = imgL.size().width;
     m_h = imgL.size().height;
     m_total = m_w * m_h;
     m_disp_ranges = (m_max_disp - m_min_disp) / DISP_STEP;
 
-    //rgb
-    m_view_l.resize(m_total * 3);
-    m_view_r.resize(m_total * 3);
-    memcpy(&m_view_l.front(), imgL.data, sizeof(float)*m_total*3);
-    memcpy(&m_view_r.front(), imgR.data, sizeof(float)*m_total*3);
+    Mat viewL, viewR, grayL, grayR;
+    imgL.convertTo(viewL, CV_32FC1, 1/255.0f);
+    imgR.convertTo(viewR, CV_32FC1, 1/255.0f);
+    cvtColor(viewL, grayL, CV_RGB2GRAY);
+    cvtColor(viewR, grayR, CV_RGB2GRAY);
 
-    //rgb uchar image
-    imgL.convertTo(m_rgb_view_l, CV_8UC3, 255);
-    imgR.convertTo(m_rgb_view_r, CV_8UC3, 255);
+    //rgb float [0,1]
+    m_view_l.resize(m_total * 3); memcpy(&m_view_l.front(), viewL.data, sizeof(float)*m_total*3);
+    m_view_r.resize(m_total * 3); memcpy(&m_view_r.front(), viewR.data, sizeof(float)*m_total*3);
+    //gray float [0,1]
+    m_gray_l.resize(m_total); memcpy(&m_gray_l.front(), grayL.data, sizeof(float)*m_total);
+    m_gray_r.resize(m_total); memcpy(&m_gray_r.front(), grayR.data, sizeof(float)*m_total);
+    //mask uchar [0,255]
+    m_mask_l.resize(m_total); memcpy(&m_mask_l.front(), mskL.data, sizeof(uchar)*m_total);
+    m_mask_r.resize(m_total); memcpy(&m_mask_r.front(), mskR.data, sizeof(uchar)*m_total);
 
-    //mask
-    m_mat_mask_l = mskL.clone();
-    m_mat_mask_r = mskR.clone();
-
-    //gray
-    m_gray_l.resize(m_total);
-    m_gray_r.resize(m_total);
-    memcpy(&m_gray_l.front(), grayL.data, sizeof(float)*m_total);
-    memcpy(&m_gray_r.front(), grayR.data, sizeof(float)*m_total);
-
-    //mask
-    m_mask_l.resize(m_total);
-    m_mask_r.resize(m_total);
-    memcpy(&m_mask_l.front(), mskL.data, sizeof(uchar)*m_total);
-    memcpy(&m_mask_r.front(), mskR.data, sizeof(uchar)*m_total);
     m_valid_pixels_l = countNonZero(mskL);
     m_valid_pixels_r = countNonZero(mskR);
 

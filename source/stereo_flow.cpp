@@ -8,10 +8,18 @@
 #include "qx_upsampling/qx_zdepth_upsampling_using_rbf.h"
 #include "hashmap.h"
 
+
+#include "../../Qing/qing_basic.h"
 #include "../../Qing/qing_disp.h"
 #include "../../Qing/qing_timer.h"
 #include "../../Qing/qing_image.h"
+#include "../../Qing/qing_memory.h"
+#include "../../Qing/qing_macros.h"
 #include "../../Qing/qing_median_filter.h"
+#include "../../Qing/qing_matching_cost.h"
+#include "../../Qing/qing_aggregation.h"
+#include "../../Qing/qing_ply.h"
+
 
 const CCType CCNAME = zncc;
 const CAType CANAME = bf;
@@ -42,20 +50,18 @@ AggrMethod * StereoFlow::set_aggr_type(const CAType name) {
 
 void StereoFlow::calc_mean_images() {
 
-    Mat grayL(m_h, m_w, CV_32FC1); qing_vec_2_img<float>(m_gray_l, grayL);
-    Mat grayR(m_h, m_w, CV_32FC1); qing_vec_2_img<float>(m_gray_r, grayR);
-    Mat meanL, meanR;
-    cv::blur(grayL, meanL, Size(m_wnd_size, m_wnd_size));
-    cv::blur(grayR, meanR, Size(m_wnd_size, m_wnd_size));
+    //unsigned char [0,255]
+    cv::blur(m_mat_gray_l, m_mat_mean_l, Size(m_wnd_size, m_wnd_size));
+    cv::blur(m_mat_gray_r, m_mat_mean_r, Size(m_wnd_size, m_wnd_size));
 
-    qing_img_2_vec<float>(meanL, m_mean_l);
-    qing_img_2_vec<float>(meanR, m_mean_r);
+    Mat meanL, meanR;
+    //float [0,1]
+    m_mat_mean_l.convertTo(meanL, CV_32FC1, 1/255.0f); qing_img_2_vec<float>(meanL, m_mean_l);  //imshow("mean_l", m_mat_mean_l); waitKey(0); destroyWindow("mean_l");
+    m_mat_mean_r.convertTo(meanR, CV_32FC1, 1/255.0f); qing_img_2_vec<float>(meanR, m_mean_r);  //imshow("mean_r", m_mat_mean_r); waitKey(0); destroyWindow("mean_r");
 
 # if 1
-    cv::blur(grayL, meanL, Size(DEFAULT_NCC_WND, DEFAULT_NCC_WND));
-    cv::blur(grayR, meanR, Size(DEFAULT_NCC_WND, DEFAULT_NCC_WND));
-    m_ncc_mean_l.resize(m_total);  qing_img_2_vec<float>(meanL, m_ncc_mean_l);
-    m_ncc_mean_r.resize(m_total);  qing_img_2_vec<float>(meanR, m_ncc_mean_r);
+    m_ncc_mean_l.resize(m_total); copy(m_mean_l.begin(), m_mean_l.end(), m_ncc_mean_l.begin());
+    m_ncc_mean_r.resize(m_total); copy(m_mean_r.begin(), m_mean_r.end(), m_ncc_mean_r.begin());
     cout << "\tmean image with default_ncc_wnd done...." << endl;
 # endif
 }
@@ -236,7 +242,6 @@ void StereoFlow::calc_cluster_costs_l(const int st_k, const int ed_k, const int 
     }
 }
 
-
 void StereoFlow::calc_cluster_costs_r(const int st_k, const int ed_k, const int rx, const int ry,  vector<float> &mcosts) {
     int ncc_wnd_sz = m_wnd_size;
     int offset = ncc_wnd_sz/2;
@@ -279,7 +284,7 @@ void StereoFlow::calc_cluster_costs_r(const int st_k, const int ed_k, const int 
             }
         }
 
-   //     mcosts[k-st_k] = qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
+        //     mcosts[k-st_k] = qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
     }
 }
 
@@ -777,11 +782,11 @@ void StereoFlow::re_match_r() {
 void StereoFlow::upsampling_using_rbf() {
     cout << "\tupsampling left disparities..." ;
     QingTimer timer;
-    upsampling_using_rbf(m_rgb_view_l, m_mask_l, m_disp_l, m_best_k_l, m_best_mcost_l, m_best_prior);
+    upsampling_using_rbf(m_mat_view_l, m_mask_l, m_disp_l, m_best_k_l, m_best_mcost_l, m_best_prior);
     cout << "done..." << timer.duration() << "s" << endl;
     cout << "\tupsamling right disparities...";
     timer.restart();
-    upsampling_using_rbf(m_rgb_view_r, m_mask_r, m_disp_r, m_best_k_r, m_best_mcost_r, m_best_prior);
+    upsampling_using_rbf(m_mat_view_r, m_mask_r, m_disp_r, m_best_k_r, m_best_mcost_r, m_best_prior);
     cout << "done..." << timer.duration() << "s" << endl;
 }
 
@@ -830,112 +835,6 @@ void StereoFlow::upsampling_using_rbf(const Mat& rgb_view, const vector<uchar>& 
     destroyWindow("test_unsampling_using_rbf");
 # endif
 }
-
-/*void StereoFlow::check_outliers_l() {
-    m_outliers_l.clear(); m_outliers_l.resize(m_total, 0);
-    for(int y = 0, idx = 0; y < m_h; ++y) {
-        for(int x = 0; x < m_w; ++x) {
-            if(0==m_mask_l[idx]) { idx++; continue; }
-
-            float d_l = m_disp_l[idx];
-            int rx = x - d_l;
-            int ridx = idx - d_l;
-
-            if( 0 > rx || (0 <= rx && rx < m_w && abs(d_l - m_disp_r[ridx]) > DISP_TOLERANCE) ) {
-                bool is_occluded = true;
-                for(int k = 0; k <= m_disp_ranges; ++k) {
-                    float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
-                    if((x-d) >= 0 && d == m_disp_r[ridx]) {
-                        is_occluded = false;
-                        break;
-                    }
-                }
-                m_outliers_l[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
-            }
-            idx++;
-        }
-    }
-
-# if 0
-    Mat disp(m_h, m_w, CV_32FC1);
-    Mat disp_img(m_h, m_w, CV_8UC1);
-    Mat disp_rgb_img(m_h, m_w, CV_8UC3);
-    qing_vec_2_img<float>(m_disp_l, disp);
-    disp.convertTo(disp_img, CV_8UC1, m_scale);
-    cvtColor(disp_img, disp_rgb_img, CV_GRAY2BGR);
-
-    uchar * ptr_rgb = (uchar *)disp_rgb_img.ptr<uchar>(0);
-
-    for(int y = 0, idx = 0; y < m_h; ++y) {
-        for(int x = 0; x < m_w; ++x) {
-            if(0==m_mask_l[idx] || 0==m_outliers_l[idx]) {idx++;continue;}
-            if(DISP_MISMATCH == m_outliers_l[idx]) {                 //red
-                ptr_rgb[3*idx+0] = 0; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 255;
-            }
-            else if(DISP_OCCLUSION == m_outliers_l[idx]) {           //blue
-                ptr_rgb[3*idx+0] = 255; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 0;
-            }
-            idx ++;
-        }
-    }
-
-    imshow("test_outliers_l", disp_rgb_img);
-    waitKey(0);
-    destroyWindow("test_outliers_l");
-# endif
-}*/
-
-/*void StereoFlow::check_outliers_r() {
-    m_outliers_r.clear(); m_outliers_r.resize(m_total, 0);
-    for(int y = 0, idx = 0; y < m_h; ++y) {
-        for(int x = 0; x < m_w; ++x) {
-            if(m_mask_r[idx]==0) {idx++; continue;}
-
-            float d_r = m_disp_r[idx];
-            int lx = x + d_r;
-            int lidx = idx + d_r;
-
-            if( m_w <= lx || (m_w > lx && abs(d_r - m_disp_l[lidx]) > DISP_TOLERANCE) ) {
-                bool is_occluded = true;
-                for(int k = 0; k <= m_disp_ranges; ++k) {
-                    float d = qing_k_2_disp(m_max_disp, m_min_disp, k);
-                    if((x+d) <= m_w && d==m_disp_l[lidx]) {
-                        is_occluded = false;
-                        break;
-                    }
-                }
-                m_outliers_r[idx] = is_occluded ? DISP_OCCLUSION : DISP_MISMATCH;
-            }
-            idx ++;
-        }
-    }
-
-# if 0
-    Mat disp(m_h, m_w, CV_32FC1), disp_img(m_h, m_w, CV_8UC1), disp_rgb_img(m_h, m_w, CV_8UC3);
-    qing_vec_2_img<float>(m_disp_r, disp);
-    disp.convertTo(disp_img, CV_8UC1, m_scale);
-    cvtColor(disp_img, disp_rgb_img, CV_GRAY2BGR);
-
-    uchar * ptr_rgb = (uchar *)disp_rgb_img.ptr<uchar>(0);
-
-    for(int y = 0, idx = 0; y < m_h; ++y) {
-        for(int x = 0; x < m_w; ++x) {
-            if(0==m_mask_r[idx] || 0==m_outliers_r[idx]) {idx++;continue;}
-            if(DISP_MISMATCH == m_outliers_r[idx]) {                 //red
-                ptr_rgb[3*idx+0] = 0; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 255;
-            }
-            else if(DISP_OCCLUSION == m_outliers_r[idx]) {           //blue
-                ptr_rgb[3*idx+0] = 255; ptr_rgb[3*idx+1] = 0; ptr_rgb[3*idx+2] = 0;
-            }
-            idx ++;
-        }
-    }
-
-    imshow("test_outliers_r", disp_rgb_img);
-    waitKey(0);
-    destroyWindow("test_outliers_r");
-# endif
-}*/
 
 void StereoFlow::check_outliers_l() {
     m_outliers_l.clear(); m_outliers_l.resize(m_total, 0);
@@ -1234,6 +1133,200 @@ void StereoFlow::subpixel_enhancement() {
     }
 }
 
+//2017.05.31
+void StereoFlow::matching_cost() {
+    m_hwd_costvol_l.clear();
+    m_hwd_costvol_r.clear();
+
+    qing_allocf_3(m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
+    matching_cost_from_zncc();
+# if 0
+    string mcost_folder = "./matching-cost-ncc/";
+    qing_create_dir(mcost_folder);
+    string filename ;
+    float * temp_mcost = new float[m_total];
+    for(int d = 0; d < m_disp_ranges+1; ++d) {
+        memset(temp_mcost, 0, sizeof(float)*m_total);
+        for(int y = 0, idx = 0; y < m_h; ++y) {
+            for(int x = 0; x < m_w; ++x) {
+                temp_mcost[idx++] = m_hwd_costvol_l[y][x][d];
+            }
+        }
+        filename = mcost_folder + "zncc_" + qing_int_2_string(d) + ".jpg";
+        qing_save_mcost_jpg(filename, temp_mcost, m_w, m_h);
+        filename = mcost_folder + "zncc_" + qing_int_2_string(d) + ".txt";
+        qing_save_mcost_txt(filename, temp_mcost, m_total, m_w);
+    }
+# endif
+    qing_allocf_3(m_hwd_costvol_r, m_h, m_w, m_disp_ranges+1);
+    qing_stereo_flip_cost_vol(m_hwd_costvol_r, m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
+
+# if 1
+    qing_depth_best_cost(m_disp_l,m_hwd_costvol_r,m_h,m_w,m_disp_ranges + 1);
+# endif
+}
+
+void StereoFlow::matching_cost_from_zncc() {
+    //1. all pixels are substracted the mean-value of its support window
+    //2. shift right image to calculate the matching cost
+
+    qing_sub_vector<float>(m_view_sub_mean_l, m_gray_l, m_mean_l);
+    qing_sub_vector<float>(m_view_sub_mean_r, m_gray_r, m_mean_r);
+
+#if 1
+    float maxval, minval;
+    qing_max_min_vec(m_view_sub_mean_l, maxval, minval);
+    cout << "view_sub_mean_l: " <<  minval << "~" << maxval << endl;
+    qing_max_min_vec(m_view_sub_mean_r, maxval, minval );
+    cout << "view_sub_mean_r: " <<  minval << "~" << maxval << endl;
+#endif
+
+    int wndsz2 = m_wnd_size * m_wnd_size;
+    m_ncc_vecs_l = qx_allocf_3(m_h, m_w, wndsz2);
+    m_ncc_vecs_r = qx_allocf_3(m_h, m_w, wndsz2);
+    qing_compute_ncc_vecs(m_ncc_vecs_l, m_view_sub_mean_l, m_h, m_w, m_wnd_size);
+    qing_compute_ncc_vecs(m_ncc_vecs_r, m_view_sub_mean_r, m_h, m_w, m_wnd_size);
+
+    for(int i = 0; i < m_disp_ranges + 1; i++) {
+        //        for(int y = 0; y < m_h; ++y) {
+        //            qing_shift_image(f_shifted_view_sub_mean_r, f_view_sub_mean_r, 0, i, QING_DUPLICATE_BORDER);
+        //            qing_img_2_vec<float>(f_shifted_view_sub_mean_r, m_shifted_view_sub_mean_r);
+        //        }
+
+        //compute matching cost
+        for(int y = 0; y < m_h; ++y) {
+            for(int x = 0; x < m_w - i; ++x)
+                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][x+i], wndsz2);
+            for(int x = m_w - i; x < m_w; ++x)
+                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][m_w-1], wndsz2);
+        }
+    }
+}
+
+void StereoFlow::beeler_disp_refinement() {
+    int cnt = 0, times = 50, idx;
+    float tstep = 0.5f, refine_disp;
+    double ddata, dsmooth, wdata, wsmooth, epsilon;
+    QingTimer timer;
+
+    while ( cnt <= times ) {
+        cout << cnt << "th iteration.\t";
+        timer.restart();
+        if (cnt >= (int)(times * 0.5))
+            tstep =  max(0.5f - 0.02f * cnt, 0.1f);
+
+        for(int y = 1; y < m_h-1; y ++ ) {
+            for( int x = 1; x < m_w-1; x ++ ) {
+                idx = y * m_w + x;
+                if (255 != m_mask_l[idx]) { m_disp_l[idx] = 0.f; continue; }
+                if (255 != m_mask_l[idx-1] || 255 != m_mask_l[idx+1] ||
+                        255 != m_mask_l[idx-m_w] || 255 != m_mask_l[idx+m_w] ) continue;
+
+                epsilon = compute_data_item(ddata, wdata, y, x, tstep);
+                if (true == compute_smooth_item(dsmooth, wsmooth, y,x,epsilon) )
+                {
+                    refine_disp = ((wdata*ddata)+(wsmooth*dsmooth) ) / (wdata + wsmooth);
+                    m_disp_l[idx] = refine_disp;
+                }
+            }
+        }
+        cout << timer.duration() << "s. " << endl;
+        cnt ++;
+    }
+}
+
+double StereoFlow::compute_data_item(double& ddata, double& dweight, const int& y, const int& x, const float& tstep) {
+    int idx = y * m_w + x;
+    float d = m_disp_l[idx], sub_d = d  - 1, add_d = d  + 1;
+
+    double sub_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-sub_d)], m_wnd_size ) )* 0.5;
+    double src_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-d)], m_wnd_size ) ) * 0.5;
+    double add_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-add_d)], m_wnd_size) ) * 0.5;
+
+    assert(sub_epsilon > 0 && sub_epsilon < 1);
+    assert(src_epsilon > 0 && src_epsilon < 1);
+    assert(add_epsilon > 0 && add_epsilon < 1);
+
+    double min_epsilon = min(src_epsilon, min(sub_epsilon, add_epsilon) );
+    if (min_epsilon == sub_epsilon) //minus < src, add
+    {
+        ddata = d - tstep;
+        dweight = src_epsilon - sub_epsilon;
+    }
+    else if (min_epsilon == src_epsilon) //src < minus, add
+    {
+        double temp = sub_epsilon + add_epsilon - 2 * src_epsilon;
+        ddata = d + tstep * ( (sub_epsilon - add_epsilon) / (temp + 0.1) ); //·ÖÄ¸+0.1ÊÇÎªÁË·ÀÖ¹³ý0²Ù×÷
+        dweight = 0.5 * temp;
+    }
+
+    else // minepsilon == epsilonadd
+    {
+        ddata = d + tstep;
+        dweight = src_epsilon - add_epsilon;
+    }
+    return src_epsilon;
+}
+
+bool StereoFlow::compute_smooth_item(double& sdata, double& sweight, const int& y, const int& x,  const double& epsilon) {
+    double alpha = 1.5;
+    double beta = 2.0;
+    double wsmooth = 0.005; //2) double wsmooth = 0.1
+
+    int idx = y * m_w + x;
+
+    float d = m_disp_l[idx];
+    float u_d = m_disp_l[idx - m_w];
+    float d_d = m_disp_l[idx + m_w];
+    float l_d = m_disp_l[idx - 1];
+    float r_d = m_disp_l[idx + 1];
+
+    double wx, wy;
+
+    wx = abs(l_d - d) - abs(r_d - d);
+    wx = exp(- (wx * wx) );
+    wy = abs(u_d - d) - abs(d_d - d);
+    wy = exp(- (wy * wy) );
+
+    if ( (wx + wy == 0) )
+    {
+        /*1)
+        wx = wx + 0.05;
+        wy = wy + 0.05;*/
+        return false;
+    }
+
+    sdata = wx * (l_d + r_d) + wy * (u_d + d_d);
+    sdata = sdata / ( 2 * (wx + wy) );
+    sweight = wsmooth * (1 + alpha * epsilon + beta * epsilon * epsilon);
+    return true;
+}
+
+void StereoFlow::fast_check_disp_by_depth(const float scale, Point2i crop_l, Point2i crop_r, Mat &qmatrix) {
+    Point2f local_crop_l = crop_l * scale;
+    Point2f local_crop_r = crop_r * scale;
+
+    cout << scale << endl;
+    cout << local_crop_l << endl;
+    cout << local_crop_r << endl;
+    double * qmtx = (double *)qmatrix.ptr<double>(0);
+    qmtx[0*4+3] *= scale;
+    qmtx[1*4+3] *= scale;
+    qmtx[2*4+3] *= scale;
+    cout << qmatrix << endl;
+
+    float crop_d = local_crop_l.x - local_crop_r.x;
+    vector<float> disp_with_crop(m_total, 0.f);
+    for(int i = 0; i < m_total; ++i) {
+        if(255 != m_mask_l[i]) continue;
+        disp_with_crop[i] += crop_d;
+    }
+
+    vector<Vec3f> points, colors;
+    qing_disp_2_depth(points, colors, &disp_with_crop.front(), &m_mask_l.front(), m_mat_view_l.ptr<unsigned char>(0), qmtx, local_crop_l, m_w, m_h );
+    qing_write_xyz("fast_check_disparity.xyz", points);
+    cout << "saving fast_check_disparity.xyz.." << points.size() << " points. " << endl;
+}
 
 #if 0
 void StereoFlow::scanline_optimize(const int direction) {

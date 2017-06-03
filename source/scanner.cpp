@@ -4,6 +4,7 @@
 
 #include "../../Qing/qing_image.h"
 #include "../../Qing/qing_ply.h"
+#include "../../Qing/qing_macros.h"
 
 bool HumanBodyScanner::init()
 {
@@ -108,7 +109,7 @@ void HumanBodyScanner::load_and_crop_images()
         m_mskR = full_mskR(Rect(m_crop_pointR, m_size)).clone();
     }
 
-    //crop images
+    //crop images. saving pixels with masks
     full_imgL(Rect(m_crop_pointL, m_size)).copyTo(m_imgL, m_mskL);
     full_imgR(Rect(m_crop_pointR, m_size)).copyTo(m_imgR, m_mskR);
 
@@ -119,13 +120,11 @@ void HumanBodyScanner::load_and_crop_images()
     imwrite(m_out_dir + "/crop_mskR.jpg", m_mskR);
 #endif
 
-    exit(1);
-
     //normalize image format and values
     cvtColor(m_imgL, m_imgL, CV_BGR2RGB);
     cvtColor(m_imgR, m_imgR, CV_BGR2RGB);
-    m_imgL.convertTo(m_imgL, CV_32F, 1/255.0f);
-    m_imgR.convertTo(m_imgR, CV_32F, 1/255.0f);
+    //    m_imgL.convertTo(m_imgL, CV_32F, 1/255.0f);
+    //    m_imgR.convertTo(m_imgR, CV_32F, 1/255.0f);
 }
 
 void HumanBodyScanner::build_stereo_pyramid()
@@ -142,7 +141,9 @@ void HumanBodyScanner::build_stereo_pyramid()
 
     int t_max_disp = m_max_disp;
     int t_min_disp = m_min_disp;
+    int t_wnd_sz = QING_WND_SIZE;
     float t_disp_scale = (m_max_disp <= 255) ? (255/m_max_disp) : min((255.f/m_max_disp), 0.5f);
+
 
     for(int p = 0; p < m_max_levels; ++p) {
         int w = t_imgL.size().width;
@@ -153,61 +154,75 @@ void HumanBodyScanner::build_stereo_pyramid()
             break;
         }
 
-        cout << "\n\tPyramid " << p << ": "<< t_min_disp << " ~ " << t_max_disp << ", scale = " << t_disp_scale << '\t';
+        cout << "\n\tPyramid " << p << ": "<< t_min_disp << " ~ " << t_max_disp << ", scale = " << t_disp_scale << ", wnd = " << t_wnd_sz << '\t';
         cout << "initialization of stereo flow..." << endl;
-        m_stereo_pyramid[p] = new StereoFlow(t_imgL, t_imgR, t_mskL, t_mskR, t_max_disp, t_min_disp, t_disp_scale);
+        if(0==p) {
+            cout << "\tdon't consider the original image." << endl;
+            m_stereo_pyramid[p] = NULL;
+        }
+        else{
+            m_stereo_pyramid[p] = new StereoFlow(t_imgL, t_imgR, t_mskL, t_mskR, t_max_disp, t_min_disp, t_disp_scale);
+            m_stereo_pyramid[p]->set_wnd_size(t_wnd_sz);
+            m_stereo_pyramid[p]->calc_mean_images();
+        }
 
         //downsample
         t_max_disp = t_max_disp * 0.5;
         t_min_disp = t_min_disp * 0.5;
         t_disp_scale = min(t_disp_scale * 2, 1.f);
+        t_wnd_sz = t_wnd_sz;
 
 #if DEBUG
         if(p) {
             string savefn;
+            string lvlstr = int2string(p);
 
-            savefn = m_out_dir + "/crop_imgL_" + int2string(p) + ".jpg";
-            qing_save_image(savefn, t_imgL, 255);
-            savefn = m_out_dir + "/crop_imgR_" + int2string(p) + ".jpg";
-            qing_save_image(savefn, t_imgR, 255);
-            savefn = m_out_dir + "/crop_mskL_" + int2string(p) + ".jpg";
-            qing_save_image(savefn, t_mskL);
-            savefn = m_out_dir + "/crop_mskR_" + int2string(p) + ".jpg";
-            qing_save_image(savefn, t_mskR);
+            savefn = m_out_dir + "/crop_imgL_" + lvlstr + ".jpg";            qing_save_image(savefn, t_imgL);
+            savefn = m_out_dir + "/crop_imgR_" + lvlstr + ".jpg";            qing_save_image(savefn, t_imgR);
+            savefn = m_out_dir + "/crop_mskL_" + lvlstr + ".jpg";            qing_save_image(savefn, t_mskL);
+            savefn = m_out_dir + "/crop_mskR_" + lvlstr + ".jpg";            qing_save_image(savefn, t_mskR);
+            savefn = m_out_dir + "/mean_imgL_" + lvlstr + ".jpg";            qing_save_image(savefn, m_stereo_pyramid[p]->get_mat_mean_l(), 255);
+            savefn = m_out_dir + "/mean_imgR_" + lvlstr + ".jpg";            qing_save_image(savefn, m_stereo_pyramid[p]->get_mat_mean_r(), 255);
         }
 #endif
         //guassian filter then choose half cols
         pyrDown(t_imgL, t_imgL);
         pyrDown(t_imgR, t_imgR);
-        pyrDown(t_mskL, t_mskL);
-        // threshold(t_mskL, t_mskL, 128, 255, THRESH_BINARY);
-        qing_threshold_msk(t_mskL, t_mskL, 128, 255);
-        pyrDown(t_mskR, t_mskR);
-        // threshold(t_mskR, t_mskR, 128, 255, THRESH_BINARY);
-        qing_threshold_msk(t_mskR, t_mskR, 128, 255);
-
-        /*setting support area size*/
-        /*calculating mean image*/
-
+        pyrDown(t_mskL, t_mskL);        qing_threshold_msk(t_mskL, t_mskL, 128, 255);
+        pyrDown(t_mskR, t_mskR);        qing_threshold_msk(t_mskR, t_mskR, 128, 255);
     }
 
     cout << "\nstereo pyramid building done. max levels = " << m_max_levels << endl;
 }
 
+void HumanBodyScanner::build_stereo_costvol() {
+
+    cout << "\ncost volume pyramid building start." << endl;
+    double duration ;
+    for(int p = m_max_levels - 1; p >= 1; --p) {
+        duration = getTickCount();
+        m_stereo_pyramid[p]->matching_cost();
+        printf( "\tmatching cost volume computation: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );   // the elapsed time in sec
+
+    }
+    cout << "\ncost volume pyramid building finished." << endl;
+
+}
+
 void HumanBodyScanner::match()
 {
-    build_stereo_pyramid();
+    build_stereo_pyramid();    //build image pyramid
+    //    build_stereo_costvol();    //compute hirerchical matching cost volume
 
-    for(int p = m_max_levels - 1, cnt = 2; p >= 0; --p, ++cnt) {
+    for(int p = m_max_levels - 1; p >= 1; --p) {
         //support window size: 5 -> 7 -> 9 -> 11
-        int wnd_sz = 2 * cnt + 1;
+        //int wnd_sz = 2 * cnt + 1;
 
-        m_stereo_pyramid[p]->set_wnd_size(wnd_sz);
-        m_stereo_pyramid[p]->calc_mean_images();
-        m_stereo_pyramid[p]->set_patch_params(wnd_sz + 2);
+        //m_stereo_pyramid[p]->set_wnd_size(wnd_sz);
+        //m_stereo_pyramid[p]->calc_mean_images();
+        m_stereo_pyramid[p]->set_patch_params(QING_WND_SIZE);
         m_stereo_pyramid[p]->calc_support_region();
-        //m_stereo_pyramid[p]->set_voting_params(wnd_sz);
-
+        //m_stereo_pyramid[p]->set_voting_params(wnd_sz); //can be replaced by median filtering
 
         double duration = (double)getTickCount();
         if(m_max_levels - 1 == p)
@@ -221,9 +236,11 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->set_data_source(m_stereo_pyramid[p]);                      //set data source
+        m_stereo_pyramid[p]->fast_check_disp_by_depth((1.0f/(1<<3)), m_crop_pointL, m_crop_pointR, m_qmatrix);
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
 #endif
+        exit(1);
 
         /*---------------------------------------------------------------------------------------------------------------------*/
         /*                                              propagation                                                            */
@@ -458,13 +475,13 @@ void HumanBodyScanner::triangulate() {
     }
 
     //preparing color
-    Mat color_img;
-    m_imgL.convertTo(color_img, CV_8UC3, 255.0);
+    //   Mat color_img = m_imgL.clone();
+    //   m_imgL.convertTo(color_img, CV_8UC3, 255.0);
 
     vector<Vec3f> points(0);
     vector<Vec3f> colors(0);
 
-    disp_2_depth(m_disp, erode_msk, color_img, points, colors);
+    disp_2_depth(m_disp, erode_msk, m_imgL, points, colors);
     string savefn = m_out_dir + "/" + m_frame_name + "_pointcloud_" + m_stereo_name + ".ply";
     qing_write_point_color_ply(savefn, points, colors);
     cout << "\nsave " << savefn << " done. " << points.size() << " Points." << endl;
