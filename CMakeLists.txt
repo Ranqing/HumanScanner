@@ -19,18 +19,18 @@ endmacro(use_cxx11)
 use_cxx11()
 
 file(GLOB PROJECT_FILES
-  "*.h"
-  "*.cpp"
-  "aggr/*.h"
-  "aggr/*.cpp"
-  "cost/*.h"
-  "cost/*.cpp"
-  "features/*.h"
-  "features/*.cpp"
-  "hashmap/*.h"
-  "hashmap/*.cpp"
-  "qx_upsampling/*.h"
-  "qx_upsampling/*.cpp"
+  "source/*.h"
+  "source/*.cpp"
+  "source/aggr/*.h"
+  "source/aggr/*.cpp"
+  "source/cost/*.h"
+  "source/cost/*.cpp"
+  "source/features/*.h"
+  "source/features/*.cpp"
+  "source/hashmap/*.h"
+  "source/hashmap/*.cpp"
+  "source/qx_upsampling/*.h"
+  "source/qx_upsampling/*.cpp"
 )
 
 if(WITH_OPENCV)
