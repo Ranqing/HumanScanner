@@ -236,11 +236,14 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->set_data_source(m_stereo_pyramid[p]);                      //set data source
-        m_stereo_pyramid[p]->fast_check_disp_by_depth((1.0f/(1<<3)), m_crop_pointL, m_crop_pointR, m_qmatrix);
+        m_debugger->set_triangulate_info((1.0f/(1<<3)), m_crop_pointL, m_crop_pointR, m_qmatrix);
+        m_debugger->fast_check_disp_by_depth("qing_check_depth_" + qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
+      //  m_debugger->fast_check_by_histogram("qing_check_hist_" + qing_int_2_string(p) + ".jpg");
+      //  m_debugger->fast_check_sgbm("qing_check_sgbm_" + qing_int_2_string(p));
+      //  m_debugger->fast_check_by_diff("diff_" + qing_int_2_string(p) + ".jpg");
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
 #endif
-        exit(1);
 
         /*---------------------------------------------------------------------------------------------------------------------*/
         /*                                              propagation                                                            */
@@ -258,6 +261,7 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_prop_infos(p);                                                   //save propagate disparitys
 #endif
+        exit(1);
 
 #if 1
         /*--------------------------------------------------------------------------------------------------------------------*/

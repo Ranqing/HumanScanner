@@ -429,6 +429,7 @@ void StereoFlow::disp_2_matches() {
     m_matches_l.clear(); m_matches_l.reserve(m_total * 0.2);
     m_matches_r.clear(); m_matches_r.reserve(m_total * 0.2);
 
+
     for(int y = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
             int idx = y * m_w + x;
@@ -484,6 +485,7 @@ void StereoFlow::matches_2_disp() {
 void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, MatchHash *&hashmap) {
 
     while(!queue.empty()) {
+        cout << "Hah" << endl;
         Match t_match = queue.top(); queue.pop();
 
         float d = t_match.get_d(), lx, ly, rx, ry;
@@ -491,8 +493,10 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
         if(0>k || m_disp_ranges<k) continue;
 
         if(0==direction) {
-            lx = t_match.get_x(); ly = t_match.get_y();
-            rx = lx - d; ry = ly;
+            lx = t_match.get_x();
+            ly = t_match.get_y();
+            rx = lx - d;
+            ry = ly;
         }
         else {
             rx = t_match.get_x(); ry = t_match.get_y();
@@ -581,25 +585,27 @@ void StereoFlow::seed_propagate(const int direction) {
         copy(m_matches_r.begin(), m_matches_r.end(), seeds.begin());
     }
 
-    cout << "\tstart propagation..." << endl;
+    cout << "\tstart propagation..." ;
     priority_queue<Match> prior_queue;
     for(int i = 0, sz = seeds.size(); i < sz; ++i) {
         prior_queue.push(seeds[i]);
     }
+    cout << "\t" << prior_queue.size() << " matches..." << endl;
 
-#if 0
+#if 1
     fstream fout("prior_queue_match.txt", ios::out);
     for(int i = 0, sz = prior_queue.size(); i < sz; ++i) {
         Match t_match = prior_queue.top();
         prior_queue.pop();
         fout << t_match ;
     }
-    exit(1);
 #endif
 
     hashmap->init(m_total, m_total);
+    cout << "\tmatch hash map initialization done..." << endl;  //<< m_num_keys << " keys, " << m_num_values << " values. " << endl;
+
     propagate(direction, prior_queue, hashmap);
-    cout << "\tafter propagation: " << hashmap->get_num_of_keys() << endl;
+    cout << "\tafter propagation: " << hashmap->get_num_of_keys() << " matches..." << endl;
 
     if(0==direction)    hashmap->copy_to(m_matches_l);
     else hashmap->copy_to(m_matches_r);
@@ -1300,32 +1306,6 @@ bool StereoFlow::compute_smooth_item(double& sdata, double& sweight, const int& 
     sdata = sdata / ( 2 * (wx + wy) );
     sweight = wsmooth * (1 + alpha * epsilon + beta * epsilon * epsilon);
     return true;
-}
-
-void StereoFlow::fast_check_disp_by_depth(const float scale, Point2i crop_l, Point2i crop_r, Mat &qmatrix) {
-    Point2f local_crop_l = crop_l * scale;
-    Point2f local_crop_r = crop_r * scale;
-
-    cout << scale << endl;
-    cout << local_crop_l << endl;
-    cout << local_crop_r << endl;
-    double * qmtx = (double *)qmatrix.ptr<double>(0);
-    qmtx[0*4+3] *= scale;
-    qmtx[1*4+3] *= scale;
-    qmtx[2*4+3] *= scale;
-    cout << qmatrix << endl;
-
-    float crop_d = local_crop_l.x - local_crop_r.x;
-    vector<float> disp_with_crop(m_total, 0.f);
-    for(int i = 0; i < m_total; ++i) {
-        if(255 != m_mask_l[i]) continue;
-        disp_with_crop[i] += crop_d;
-    }
-
-    vector<Vec3f> points, colors;
-    qing_disp_2_depth(points, colors, &disp_with_crop.front(), &m_mask_l.front(), m_mat_view_l.ptr<unsigned char>(0), qmtx, local_crop_l, m_w, m_h );
-    qing_write_xyz("fast_check_disparity.xyz", points);
-    cout << "saving fast_check_disparity.xyz.." << points.size() << " points. " << endl;
 }
 
 #if 0

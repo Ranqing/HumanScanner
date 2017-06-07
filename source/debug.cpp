@@ -2,6 +2,7 @@
 #include "stereo_flow.h"
 
 #include "../../Qing/qing_image.h"
+#include "../../Qing/qing_ply.h"
 
 Debugger::Debugger(const string& dir):m_save_dir(dir)  {
 }
@@ -13,6 +14,30 @@ Debugger::~Debugger() {
 void Debugger::set_data_source(StereoFlow *stereo_fl) {
     m_stereo_fl = stereo_fl;
     m_scale = m_stereo_fl->get_scale();
+    m_w = m_stereo_fl->get_w();
+    m_h = m_stereo_fl->get_h();
+    m_total = m_w * m_h;
+}
+
+void Debugger::set_triangulate_info(const float &scale, const Point2i &crop_l, const Point2i &crop_r, const Mat &qmatrix) {
+    m_crop_l = crop_l * scale;
+    m_crop_r = crop_r * scale;
+    m_qmatrix = qmatrix.clone();
+
+    double * qmtx = (double *)m_qmatrix.ptr<double>(0);
+    qmtx[0*4+3] *= scale;
+    qmtx[1*4+3] *= scale;
+    qmtx[2*4+3] *= scale;
+
+    m_crop_d = (crop_l.x - crop_r.x)*scale;
+
+# if 0
+    cout << scale << endl;
+    cout << m_crop_l << endl;
+    cout << m_crop_r << endl;
+    cout << m_crop_d << endl;
+    cout << m_qmatrix << endl;
+# endif
 }
 
 void Debugger::get_disp_datas(Mat& disp_l, Mat& disp_r, Mat& disp) {
@@ -20,12 +45,9 @@ void Debugger::get_disp_datas(Mat& disp_l, Mat& disp_r, Mat& disp) {
     vector<float>& disp_vec_r = m_stereo_fl->get_disp_r();
     vector<float>& disp_vec = m_stereo_fl->get_disp();
 
-    int w = m_stereo_fl->get_w();
-    int h = m_stereo_fl->get_h();
-
-    disp_l = Mat::zeros(h, w, CV_32FC1);
-    disp_r = Mat::zeros(h, w, CV_32FC1);
-    disp = Mat::zeros(h, w, CV_32FC1);
+    disp_l = Mat::zeros(m_h, m_w, CV_32FC1);
+    disp_r = Mat::zeros(m_h, m_w, CV_32FC1);
+    disp = Mat::zeros(m_h, m_w, CV_32FC1);
 
     qing_vec_2_img<float>(disp_vec_l, disp_l);
     qing_vec_2_img<float>(disp_vec_r, disp_r);
@@ -108,23 +130,20 @@ void Debugger::save_init_infos(const int level) {
     save_int_vec_data(save_fn_l, w, h, m_stereo_fl->get_bestk_l());
     save_fn_r = m_save_dir + "/best_k_r_" + str + ".txt";
     save_int_vec_data(save_fn_r, w, h, m_stereo_fl->get_bestk_r());
-     cout << "debug:\tsaving " << save_fn_l  << '\t' << save_fn_r << endl;
+    cout << "debug:\tsaving " << save_fn_l  << '\t' << save_fn_r << endl;
 
-//    for(int i = 0; i < ranges; ++i) {
-//        save_fn_l = m_save_dir + "/mcost_l_" + str + "_" + int2string(i) + ".txt";
-//        save_float_vec_data(save_fn_l, w, h, m_stereo_fl->get_mcost_l(i));
-//        save_fn_r = m_save_dir + "/mcost_r_" + str + "_" + int2string(i) + ".txt";
-//        save_float_vec_data(save_fn_r, w, h, m_stereo_fl->get_mcost_r(i));
-//        cout << "debug:\tsaving " << save_fn_l << "\t" << save_fn_r << endl;
-//    }
+    //    for(int i = 0; i < ranges; ++i) {
+    //        save_fn_l = m_save_dir + "/mcost_l_" + str + "_" + int2string(i) + ".txt";
+    //        save_float_vec_data(save_fn_l, w, h, m_stereo_fl->get_mcost_l(i));
+    //        save_fn_r = m_save_dir + "/mcost_r_" + str + "_" + int2string(i) + ".txt";
+    //        save_float_vec_data(save_fn_r, w, h, m_stereo_fl->get_mcost_r(i));
+    //        cout << "debug:\tsaving " << save_fn_l << "\t" << save_fn_r << endl;
+    //    }
 # endif
 }
 
 void Debugger::save_seed_infos(const int level) {
-    int w = m_stereo_fl->get_w();
-    int h = m_stereo_fl->get_h();
-
-    Mat disp_seed = Mat::zeros(h, w, CV_32FC1);
+    Mat disp_seed = Mat::zeros(m_h, m_w, CV_32FC1);
     vector<float>& disp_vec_seed = m_stereo_fl->get_disp_seed();
     qing_vec_2_img<float>(disp_vec_seed, disp_seed);
 
@@ -295,4 +314,123 @@ void Debugger::save_subpixel_infos(const int level) {
     vector<float>& disp = m_stereo_fl->get_disp();
     save_float_vec_data(save_fn, w, h, disp);
     cout << "debug:\tsaving " << save_fn << endl;
+}
+
+//by 2017.05.30
+//check by disparity
+void Debugger::fast_check_sgbm(const string sgbmname) {
+
+    StereoSGBM sgbm;
+    sgbm.preFilterCap = 63;
+    sgbm.SADWindowSize = 3;
+
+    int cn = 1;
+
+    sgbm.P1 = 8*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
+    sgbm.P2 = 32*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
+    sgbm.minDisparity = 0;                                              //0
+    sgbm.numberOfDisparities = (m_stereo_fl->get_disp_range() + 1)*16;                              //total search disparity : 480 * 16
+    sgbm.uniquenessRatio = 10;
+    sgbm.speckleWindowSize = 100;
+    sgbm.speckleRange = 32;
+    sgbm.disp12MaxDiff = 1;
+    sgbm.fullDP = true;
+
+    Mat mat_gray_l = m_stereo_fl->get_mat_gray_l();
+    Mat mat_gray_r = m_stereo_fl->get_mat_gray_r();
+    Mat mat_mask_l = m_stereo_fl->get_mat_mask_l();
+    Mat mat_disp;
+    sgbm(mat_gray_l, mat_gray_r, mat_disp);
+
+    Mat show_disp, show_disp_with_mask, true_disp;
+    mat_disp.convertTo(true_disp, CV_32FC1, 1.f/16);
+    mat_disp.convertTo(show_disp, CV_8U, 255.0/(sgbm.numberOfDisparities));
+    show_disp.copyTo(show_disp_with_mask, mat_mask_l);
+
+    double maxVal, minVal;
+    minMaxLoc(show_disp, &minVal, &maxVal);
+
+    string jpgname = sgbmname + ".jpg";
+    imwrite(jpgname, show_disp_with_mask );
+    cout << "debug:\tsaving " + jpgname << endl;
+    string plyname = sgbmname + ".ply";
+    fast_check_disp_by_depth(plyname, true_disp.ptr<float>(0));
+}
+
+void Debugger::fast_check_disp_by_depth(const string filename, float * mdisp) {
+    Mat mat_view_l = m_stereo_fl->get_mat_view_l().clone();
+    Mat mat_mask_l = m_stereo_fl->get_mat_mask_l().clone();
+    cvtColor(mat_view_l, mat_view_l, CV_BGR2RGB);
+
+    unsigned char * pmsk = (unsigned char *)(mat_mask_l.ptr<unsigned char>(0));
+    unsigned char * pclr = (unsigned char *)(mat_view_l.ptr<unsigned char>(0));
+    double * qmtx = (double *)m_qmatrix.ptr<double>(0);
+
+    float * pdsp = new float[m_total];
+    //vector<float>& mdisp = m_stereo_fl->get_disp(); //m_stereo_fl->get_disp_l();
+    memcpy(pdsp, mdisp, sizeof(float)*m_total);
+
+    for(int i = 0; i < m_total; ++i) {
+        if(255 != pmsk[i] || 0 == pdsp[i]) continue;
+        pdsp[i] += m_crop_d;
+    }
+
+    vector<Vec3f> points, colors;
+    qing_disp_2_depth(points, colors, pdsp, pmsk, pclr, qmtx, m_crop_l, m_w, m_h );
+    qing_write_point_color_ply(filename, points, colors);
+    cout << "debug:\tsaving.." << filename << "\t" << points.size() << " points. " << endl;
+}
+
+//check by disparity histogram: draw histogram
+void Debugger::fast_check_by_histogram(const string histname, int disp_range, int y_min, int y_max) {
+    Mat mat_disp = Mat::zeros(m_h, m_w, CV_32FC1);
+    qing_vec_2_img<float>(m_stereo_fl->get_disp_l(), mat_disp);
+    Mat mat_mask = m_stereo_fl->get_mat_mask_l();
+
+    if(0 == disp_range) disp_range = m_stereo_fl->get_disp_range();
+    if(0 == (y_min * y_max)) { y_min = 0; y_max = m_h - 1; }
+
+    int hist_size = disp_range+1;
+    int hist_w = disp_range+1;
+    int hist_h = 400;
+    int bin_w = cvRound( (double) hist_w/hist_size );
+    float range[] = {0, disp_range+1};
+    const float * hist_range = { range };
+    bool uniform = true, accumulate = false;
+
+    Mat disp_hist;
+    calcHist(&mat_disp, 1, 0, mat_mask, disp_hist, 1, &hist_size, &hist_range, uniform, accumulate);
+    cout << "histogram size: " << disp_hist.size() << ", bin_w = " << bin_w << endl;
+    float * p_disp_hist = (float *)disp_hist.ptr<float>(0);
+
+    Mat hist_img( hist_h, hist_w, CV_8UC1, Scalar(0) );
+    for(int i = 1; i < hist_size; ++i) {
+        line(hist_img, Point( bin_w*(i-1), hist_h - p_disp_hist[(i-1)] ), Point(bin_w*(i), hist_h - p_disp_hist[(i)] ), Scalar(255), 2, 8, 0 );
+    }
+
+    imwrite(histname, hist_img);
+    cout << "saving " << histname << endl;
+}
+
+//check by disparity difference:
+void Debugger::fast_check_by_diff(const string diffname, const int diff_thresh) {
+
+    Mat mat_diff_disp(m_h, m_w, CV_8UC1, Scalar(0));
+    Mat mat_mask_l = m_stereo_fl->get_mat_mask_l();
+
+    unsigned char * diff = (unsigned char *)mat_diff_disp.ptr<unsigned char>(0);
+    unsigned char * pmsk = (unsigned char *)(mat_mask_l.ptr<unsigned char>(0));
+    vector<float>&  disp = m_stereo_fl->get_disp_l();
+
+    int idx = 0;
+    for(int y = 0; y < m_h; ++y) {
+        for(int x = 1; x < m_w; ++x) {
+            idx ++;
+            if(255!=pmsk[idx]) continue;
+            if(abs(disp[idx] - disp[idx-1]) > diff_thresh) diff[idx] = 255;
+        }
+    }
+
+    imwrite(diffname, mat_diff_disp);
+    cout << "saving " << diffname << endl;
 }

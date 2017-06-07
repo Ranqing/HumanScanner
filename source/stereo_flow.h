@@ -155,6 +155,10 @@ public:
     Mat get_mat_mask_r()  { return m_mat_mask_r; }
     Mat get_mat_mean_l()  { return m_mat_mean_l; }
     Mat get_mat_mean_r()  { return m_mat_mean_r; }
+    Mat get_mat_view_l()  { return m_mat_view_l; }
+    Mat get_mat_view_r()  { return m_mat_view_r; }
+    Mat get_mat_gray_l() { return m_mat_gray_l; }
+    Mat get_mat_gray_r() { return m_mat_gray_r; }
 
     vector<int>& get_bestk_l() { return m_best_k_l; }
     vector<int>& get_bestk_r() { return m_best_k_r; }

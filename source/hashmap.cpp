@@ -17,8 +17,7 @@ void MatchHash::init(const int cap_keys, const int cap_values) {
         cerr << "failed to initial match hash map... " << endl;
         exit(-1);
     }
-    cout << "\tmatch hash map initialization done..." << m_num_keys << " keys, " << m_num_values << " values. " << endl;
-}
+ }
 
 bool MatchHash::is_exist(const Point2f &key, const MatchValue &value) {
     if(get_init(key)) {
