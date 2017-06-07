@@ -320,41 +320,41 @@ void Debugger::save_subpixel_infos(const int level) {
 //check by disparity
 void Debugger::fast_check_sgbm(const string sgbmname) {
 
-    StereoSGBM sgbm;
-    sgbm.preFilterCap = 63;
-    sgbm.SADWindowSize = 3;
-
-    int cn = 1;
-
-    sgbm.P1 = 8*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
-    sgbm.P2 = 32*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
-    sgbm.minDisparity = 0;                                              //0
-    sgbm.numberOfDisparities = (m_stereo_fl->get_disp_range() + 1)*16;                              //total search disparity : 480 * 16
-    sgbm.uniquenessRatio = 10;
-    sgbm.speckleWindowSize = 100;
-    sgbm.speckleRange = 32;
-    sgbm.disp12MaxDiff = 1;
-    sgbm.fullDP = true;
-
-    Mat mat_gray_l = m_stereo_fl->get_mat_gray_l();
-    Mat mat_gray_r = m_stereo_fl->get_mat_gray_r();
-    Mat mat_mask_l = m_stereo_fl->get_mat_mask_l();
-    Mat mat_disp;
-    sgbm(mat_gray_l, mat_gray_r, mat_disp);
-
-    Mat show_disp, show_disp_with_mask, true_disp;
-    mat_disp.convertTo(true_disp, CV_32FC1, 1.f/16);
-    mat_disp.convertTo(show_disp, CV_8U, 255.0/(sgbm.numberOfDisparities));
-    show_disp.copyTo(show_disp_with_mask, mat_mask_l);
-
-    double maxVal, minVal;
-    minMaxLoc(show_disp, &minVal, &maxVal);
-
-    string jpgname = sgbmname + ".jpg";
-    imwrite(jpgname, show_disp_with_mask );
-    cout << "debug:\tsaving " + jpgname << endl;
-    string plyname = sgbmname + ".ply";
-    fast_check_disp_by_depth(plyname, true_disp.ptr<float>(0));
+//    StereoSGBM sgbm;
+//    sgbm.preFilterCap = 63;
+//    sgbm.SADWindowSize = 3;
+//
+//    int cn = 1;
+//
+//    sgbm.P1 = 8*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
+//    sgbm.P2 = 32*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
+//    sgbm.minDisparity = 0;                                              //0
+//    sgbm.numberOfDisparities = (m_stereo_fl->get_disp_range() + 1)*16;                              //total search disparity : 480 * 16
+//    sgbm.uniquenessRatio = 10;
+//    sgbm.speckleWindowSize = 100;
+//    sgbm.speckleRange = 32;
+//    sgbm.disp12MaxDiff = 1;
+//    sgbm.fullDP = true;
+//
+//    Mat mat_gray_l = m_stereo_fl->get_mat_gray_l();
+//    Mat mat_gray_r = m_stereo_fl->get_mat_gray_r();
+//    Mat mat_mask_l = m_stereo_fl->get_mat_mask_l();
+//    Mat mat_disp;
+//    sgbm(mat_gray_l, mat_gray_r, mat_disp);
+//
+//    Mat show_disp, show_disp_with_mask, true_disp;
+//    mat_disp.convertTo(true_disp, CV_32FC1, 1.f/16);
+//    mat_disp.convertTo(show_disp, CV_8U, 255.0/(sgbm.numberOfDisparities));
+//    show_disp.copyTo(show_disp_with_mask, mat_mask_l);
+//
+//    double maxVal, minVal;
+//    minMaxLoc(show_disp, &minVal, &maxVal);
+//
+//    string jpgname = sgbmname + ".jpg";
+//    imwrite(jpgname, show_disp_with_mask );
+//    cout << "debug:\tsaving " + jpgname << endl;
+//    string plyname = sgbmname + ".ply";
+//    fast_check_disp_by_depth(plyname, true_disp.ptr<float>(0));
 }
 
 void Debugger::fast_check_disp_by_depth(const string filename, float * mdisp) {
@@ -394,7 +394,7 @@ void Debugger::fast_check_by_histogram(const string histname, int disp_range, in
     int hist_w = disp_range+1;
     int hist_h = 400;
     int bin_w = cvRound( (double) hist_w/hist_size );
-    float range[] = {0, disp_range+1};
+    float range[] = {0, (float)(disp_range+1)};
     const float * hist_range = { range };
     bool uniform = true, accumulate = false;
 

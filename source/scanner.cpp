@@ -73,6 +73,7 @@ bool HumanBodyScanner::init()
 
     load_and_crop_images();
     cout << "scanner initialization done..." << endl;
+    return true;
 }
 
 void HumanBodyScanner::load_and_crop_images()
