@@ -236,8 +236,9 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->set_data_source(m_stereo_pyramid[p]);                      //set data source
-        m_debugger->set_triangulate_info((1.0f/(1<<3)), m_crop_pointL, m_crop_pointR, m_qmatrix);
+        m_debugger->set_triangulate_info((1.0f/(1<<p)), m_crop_pointL, m_crop_pointR, m_qmatrix);
         m_debugger->fast_check_disp_by_depth("qing_check_depth_" + qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
+        m_debugger->fast_check_disp_by_depth("qing_check_seed_depth_" + qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp_seed()).front());
       //  m_debugger->fast_check_by_histogram("qing_check_hist_" + qing_int_2_string(p) + ".jpg");
       //  m_debugger->fast_check_sgbm("qing_check_sgbm_" + qing_int_2_string(p));
       //  m_debugger->fast_check_by_diff("diff_" + qing_int_2_string(p) + ".jpg");
@@ -260,8 +261,9 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->save_prop_infos(p);                                                   //save propagate disparitys
+        m_debugger->fast_check_disp_by_depth("qing_check_prop_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
 #endif
-        exit(1);
+
 
 #if 1
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -281,7 +283,7 @@ void HumanBodyScanner::match()
 #endif
 #endif
 
-#if 1
+#if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                           upsampling expanded pixels using guidiance filter                        */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -355,6 +357,11 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
         printf( "\tend of stereo matching in level %d\n", p);
         printf( "\t--------------------------------------------------------\n\n" );
+
+#if DEBUG
+         m_debugger->compare_init_final_disp(p);
+         m_debugger->fast_check_by_diff("qing_fast_diff_" + qing_int_2_string(p) + ".jpg", 1);
+#endif
 
 #if 0
         /*--------------------------------------------------------------------------------------------------------------------*/

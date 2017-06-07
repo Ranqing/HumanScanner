@@ -434,3 +434,18 @@ void Debugger::fast_check_by_diff(const string diffname, const int diff_thresh) 
     imwrite(diffname, mat_diff_disp);
     cout << "saving " << diffname << endl;
 }
+
+void Debugger::compare_init_final_disp(const int level) {
+    string lvlstr = qing_int_2_string(level);
+    string init_disp_name = m_save_dir + "/init_disp_l_" + lvlstr + ".jpg";
+    string final_disp_name = m_save_dir + "/final_disp_l_" + lvlstr + ".jpg";
+    Mat init_disp = imread(init_disp_name, 0);
+    Mat final_disp = imread(final_disp_name, 0);
+    Mat diff_disp;
+
+    qing_subtract_image(diff_disp, init_disp, final_disp);
+
+    string diff_disp_name = m_save_dir + "/diff_init_final_l_" + lvlstr + ".jpg";
+    imwrite(diff_disp_name, diff_disp);
+    cout << "saving " << diff_disp_name << endl;
+}

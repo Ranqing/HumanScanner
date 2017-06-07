@@ -238,7 +238,7 @@ void StereoFlow::calc_cluster_costs_l(const int st_k, const int ed_k, const int 
             }
         }
 
-        //mcosts[k-st_k] = qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
+        mcosts[k-st_k] = qing_ncc_value(ncc_vec_l, ncc_vec_r);
     }
 }
 
@@ -284,7 +284,7 @@ void StereoFlow::calc_cluster_costs_r(const int st_k, const int ed_k, const int 
             }
         }
 
-        //     mcosts[k-st_k] = qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
+        mcosts[k-st_k] = qing_ncc_value(ncc_vec_l, ncc_vec_r);
     }
 }
 
@@ -485,8 +485,8 @@ void StereoFlow::matches_2_disp() {
 void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, MatchHash *&hashmap) {
 
     while(!queue.empty()) {
-        cout << "Hah" << endl;
-        Match t_match = queue.top(); queue.pop();
+        Match t_match = queue.top();
+        queue.pop();
 
         float d = t_match.get_d(), lx, ly, rx, ry;
         int k = qing_disp_2_k(m_max_disp, m_min_disp, d);
@@ -499,8 +499,10 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
             ry = ly;
         }
         else {
-            rx = t_match.get_x(); ry = t_match.get_y();
-            lx = rx + d; ly = ry;
+            rx = t_match.get_x();
+            ry = t_match.get_y();
+            lx = rx + d;
+            ly = ry;
         }
 
         Point2f t_key(t_match.get_x(), t_match.get_y());
@@ -511,7 +513,8 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
 
         int cnt = 0, offset = 1, total = (2*offset+1)*(2*offset+1), cur_l_idx, cur_r_idx;
         float cur_lx, cur_ly, cur_rx, cur_ry;
-        vector<Match> neighbors(0);  neighbors.reserve(total);                                  //neighbor matches
+        vector<Match> neighbors(0);
+        neighbors.reserve(total);                                  //neighbor matches
 
         for(int dy = -offset; dy <= offset; ++dy) {
             cur_ly = ly + dy;
@@ -541,6 +544,8 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
                 float max_mcost, sec_mcost, prior;
                 cluster_max_takes_all(mcosts, maxk, max_mcost, sec_mcost);
                 prior = calc_max_prior(max_mcost, sec_mcost);
+
+           //   //  cout << max_mcost << '\t' << prior << endl;
 
                 if(max_mcost >= c_thresh_e_zncc && prior >= c_thresh_e_prior) {
                     float d = qing_k_2_disp(m_max_disp, m_min_disp, maxk+k-1);
@@ -592,7 +597,7 @@ void StereoFlow::seed_propagate(const int direction) {
     }
     cout << "\t" << prior_queue.size() << " matches..." << endl;
 
-#if 1
+#if 0
     fstream fout("prior_queue_match.txt", ios::out);
     for(int i = 0, sz = prior_queue.size(); i < sz; ++i) {
         Match t_match = prior_queue.top();
@@ -1187,6 +1192,7 @@ void StereoFlow::matching_cost_from_zncc() {
     cout << "view_sub_mean_r: " <<  minval << "~" << maxval << endl;
 #endif
 
+    //pre-computation of ncc vectors
     int wndsz2 = m_wnd_size * m_wnd_size;
     m_ncc_vecs_l = qx_allocf_3(m_h, m_w, wndsz2);
     m_ncc_vecs_r = qx_allocf_3(m_h, m_w, wndsz2);

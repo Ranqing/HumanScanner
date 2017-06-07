@@ -35,6 +35,8 @@ public:
     void fast_check_by_histogram(const string histname, int disp_range = 0, int y_min = 0, int y_max = 0);
     void fast_check_by_diff(const string diffname, const int diff_thresh = 0);
 
+    void compare_init_final_disp(const int level) ;
+
 private:
     string m_save_dir;                  //save dir
     float m_scale;                      //disparity scale
