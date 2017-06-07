@@ -54,10 +54,12 @@ void StereoFlow::calc_mean_images() {
     cv::blur(m_mat_gray_l, m_mat_mean_l, Size(m_wnd_size, m_wnd_size));
     cv::blur(m_mat_gray_r, m_mat_mean_r, Size(m_wnd_size, m_wnd_size));
 
+    //float [0,255]
     Mat meanL, meanR;
-    //float [0,1]
-    m_mat_mean_l.convertTo(meanL, CV_32FC1, 1/255.0f); qing_img_2_vec<float>(meanL, m_mean_l);  //imshow("mean_l", m_mat_mean_l); waitKey(0); destroyWindow("mean_l");
-    m_mat_mean_r.convertTo(meanR, CV_32FC1, 1/255.0f); qing_img_2_vec<float>(meanR, m_mean_r);  //imshow("mean_r", m_mat_mean_r); waitKey(0); destroyWindow("mean_r");
+    m_mat_mean_l.convertTo(meanL, CV_32FC1);
+    qing_img_2_vec<float>(meanL, m_mean_l);             //imshow("mean_l", m_mat_mean_l); waitKey(0); destroyWindow("mean_l");
+    m_mat_mean_r.convertTo(meanR, CV_32FC1);
+    qing_img_2_vec<float>(meanR, m_mean_r);             //imshow("mean_r", m_mat_mean_r); waitKey(0); destroyWindow("mean_r");
 
 # if 1
     m_ncc_mean_l.resize(m_total); copy(m_mean_l.begin(), m_mean_l.end(), m_ncc_mean_l.begin());
@@ -190,7 +192,7 @@ void StereoFlow::calc_init_disparity() {                                        
     m_aggr_mtd = set_aggr_type(CANAME);
 
     calc_cost_vol();
-    aggr_cost_vol();
+//    aggr_cost_vol();
 
     cout << "\tcost volume calculation done..." << endl;
     set_disp_by_wta();
@@ -545,7 +547,7 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
                 cluster_max_takes_all(mcosts, maxk, max_mcost, sec_mcost);
                 prior = calc_max_prior(max_mcost, sec_mcost);
 
-           //   //  cout << max_mcost << '\t' << prior << endl;
+                //   //  cout << max_mcost << '\t' << prior << endl;
 
                 if(max_mcost >= c_thresh_e_zncc && prior >= c_thresh_e_prior) {
                     float d = qing_k_2_disp(m_max_disp, m_min_disp, maxk+k-1);
@@ -1151,7 +1153,7 @@ void StereoFlow::matching_cost() {
 
     qing_allocf_3(m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
     matching_cost_from_zncc();
-# if 0
+# if 1
     string mcost_folder = "./matching-cost-ncc/";
     qing_create_dir(mcost_folder);
     string filename ;
@@ -1169,48 +1171,34 @@ void StereoFlow::matching_cost() {
         qing_save_mcost_txt(filename, temp_mcost, m_total, m_w);
     }
 # endif
-    qing_allocf_3(m_hwd_costvol_r, m_h, m_w, m_disp_ranges+1);
-    qing_stereo_flip_cost_vol(m_hwd_costvol_r, m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
+   // qing_allocf_3(m_hwd_costvol_r, m_h, m_w, m_disp_ranges+1);
+   // qing_stereo_flip_cost_vol(m_hwd_costvol_r, m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
 
-# if 1
-    qing_depth_best_cost(m_disp_l,m_hwd_costvol_r,m_h,m_w,m_disp_ranges + 1);
+# if 0
+    qing_depth_best_cost(m_disp_l, m_hwd_costvol_l, m_h, m_w, m_disp_ranges + 1);
+    Mat uimg(m_h, m_w, CV_8UC1, Scalar(0));
+    qing_float_vec_2_uchar_img(m_disp_l, m_scale, uimg);
+    imwrite("mcost_disp.jpg", uimg);
 # endif
 }
 
 void StereoFlow::matching_cost_from_zncc() {
-    //1. all pixels are substracted the mean-value of its support window
-    //2. shift right image to calculate the matching cost
-
-    qing_sub_vector<float>(m_view_sub_mean_l, m_gray_l, m_mean_l);
-    qing_sub_vector<float>(m_view_sub_mean_r, m_gray_r, m_mean_r);
-
-#if 1
-    float maxval, minval;
-    qing_max_min_vec(m_view_sub_mean_l, maxval, minval);
-    cout << "view_sub_mean_l: " <<  minval << "~" << maxval << endl;
-    qing_max_min_vec(m_view_sub_mean_r, maxval, minval );
-    cout << "view_sub_mean_r: " <<  minval << "~" << maxval << endl;
-#endif
 
     //pre-computation of ncc vectors
     int wndsz2 = m_wnd_size * m_wnd_size;
-    m_ncc_vecs_l = qx_allocf_3(m_h, m_w, wndsz2);
-    m_ncc_vecs_r = qx_allocf_3(m_h, m_w, wndsz2);
-    qing_compute_ncc_vecs(m_ncc_vecs_l, m_view_sub_mean_l, m_h, m_w, m_wnd_size);
-    qing_compute_ncc_vecs(m_ncc_vecs_r, m_view_sub_mean_r, m_h, m_w, m_wnd_size);
+    m_ncc_vecs_l.clear(); qing_allocf_3(m_ncc_vecs_l, m_h, m_w, wndsz2);
+    m_ncc_vecs_r.clear(); qing_allocf_3(m_ncc_vecs_r, m_h, m_w, wndsz2);
+
+    qing_compute_ncc_vecs(m_ncc_vecs_l, m_gray_l, m_mean_l, m_h, m_w, m_wnd_size);
+    qing_compute_ncc_vecs(m_ncc_vecs_r, m_gray_r, m_mean_r, m_h, m_w, m_wnd_size);
 
     for(int i = 0; i < m_disp_ranges + 1; i++) {
-        //        for(int y = 0; y < m_h; ++y) {
-        //            qing_shift_image(f_shifted_view_sub_mean_r, f_view_sub_mean_r, 0, i, QING_DUPLICATE_BORDER);
-        //            qing_img_2_vec<float>(f_shifted_view_sub_mean_r, m_shifted_view_sub_mean_r);
-        //        }
-
         //compute matching cost
         for(int y = 0; y < m_h; ++y) {
-            for(int x = 0; x < m_w - i; ++x)
-                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][x+i], wndsz2);
-            for(int x = m_w - i; x < m_w; ++x)
-                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][m_w-1], wndsz2);
+            for(int x = 0; x < i; ++x)
+                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][0]);
+            for(int x = i; x < m_w; ++x)
+                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][x-i]);
         }
     }
 }
@@ -1251,9 +1239,9 @@ double StereoFlow::compute_data_item(double& ddata, double& dweight, const int& 
     int idx = y * m_w + x;
     float d = m_disp_l[idx], sub_d = d  - 1, add_d = d  + 1;
 
-    double sub_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-sub_d)], m_wnd_size ) )* 0.5;
-    double src_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-d)], m_wnd_size ) ) * 0.5;
-    double add_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-add_d)], m_wnd_size) ) * 0.5;
+    double sub_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-sub_d)]  ) )* 0.5;
+    double src_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-d)] ) ) * 0.5;
+    double add_epsilon = (1 - qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][(int)(x-add_d)]) ) * 0.5;
 
     assert(sub_epsilon > 0 && sub_epsilon < 1);
     assert(src_epsilon > 0 && src_epsilon < 1);

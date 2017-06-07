@@ -122,8 +122,8 @@ void HumanBodyScanner::load_and_crop_images()
 #endif
 
     //normalize image format and values
-    cvtColor(m_imgL, m_imgL, CV_BGR2RGB);
-    cvtColor(m_imgR, m_imgR, CV_BGR2RGB);
+    //    cvtColor(m_imgL, m_imgL, CV_BGR2RGB);
+    //    cvtColor(m_imgR, m_imgR, CV_BGR2RGB);
     //    m_imgL.convertTo(m_imgL, CV_32F, 1/255.0f);
     //    m_imgR.convertTo(m_imgR, CV_32F, 1/255.0f);
 }
@@ -178,8 +178,8 @@ void HumanBodyScanner::build_stereo_pyramid()
             string savefn;
             string lvlstr = int2string(p);
 
-            savefn = m_out_dir + "/crop_imgL_" + lvlstr + ".jpg";            qing_save_image(savefn, t_imgL);
-            savefn = m_out_dir + "/crop_imgR_" + lvlstr + ".jpg";            qing_save_image(savefn, t_imgR);
+            savefn = m_out_dir + "/crop_imgL_" + lvlstr + ".jpg";            imwrite(savefn, t_imgL);
+            savefn = m_out_dir + "/crop_imgR_" + lvlstr + ".jpg";            imwrite(savefn, t_imgR);
             savefn = m_out_dir + "/crop_mskL_" + lvlstr + ".jpg";            qing_save_image(savefn, t_mskL);
             savefn = m_out_dir + "/crop_mskR_" + lvlstr + ".jpg";            qing_save_image(savefn, t_mskR);
             savefn = m_out_dir + "/mean_imgL_" + lvlstr + ".jpg";            qing_save_image(savefn, m_stereo_pyramid[p]->get_mat_mean_l(), 255);
@@ -202,9 +202,10 @@ void HumanBodyScanner::build_stereo_costvol() {
     double duration ;
     for(int p = m_max_levels - 1; p >= 1; --p) {
         duration = getTickCount();
+        printf("\tlevel = %d\t", p);
         m_stereo_pyramid[p]->matching_cost();
         printf( "\tmatching cost volume computation: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );   // the elapsed time in sec
-
+        exit(1);
     }
     cout << "\ncost volume pyramid building finished." << endl;
 
@@ -213,7 +214,7 @@ void HumanBodyScanner::build_stereo_costvol() {
 void HumanBodyScanner::match()
 {
     build_stereo_pyramid();    //build image pyramid
-    //    build_stereo_costvol();    //compute hirerchical matching cost volume
+    build_stereo_costvol();    //compute hirerchical matching cost volume
 
     for(int p = m_max_levels - 1; p >= 1; --p) {
         //support window size: 5 -> 7 -> 9 -> 11
@@ -242,10 +243,11 @@ void HumanBodyScanner::match()
         m_debugger->fast_check_disp_by_depth("qing_check_seed_depth_" + qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp_seed()).front());
       //  m_debugger->fast_check_by_histogram("qing_check_hist_" + qing_int_2_string(p) + ".jpg");
       //  m_debugger->fast_check_sgbm("qing_check_sgbm_" + qing_int_2_string(p));
-      //  m_debugger->fast_check_by_diff("diff_" + qing_int_2_string(p) + ".jpg");
+        m_debugger->fast_check_by_diff("diff_init_" + qing_int_2_string(p) + ".jpg");
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
 #endif
+        exit(1);
 
         /*---------------------------------------------------------------------------------------------------------------------*/
         /*                                              propagation                                                            */
@@ -263,6 +265,7 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_prop_infos(p);                                                   //save propagate disparitys
         m_debugger->fast_check_disp_by_depth("qing_check_prop_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
+        m_debugger->fast_check_by_diff("diff_prop_" + qing_int_2_string(p) + ".jpg");
 #endif
 
 
@@ -281,8 +284,11 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->save_rematch_infos(p);
+        m_debugger->fast_check_disp_by_depth("qing_check_rematch_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
+        m_debugger->fast_check_by_diff("diff_rematch_" + qing_int_2_string(p) + ".jpg");
 #endif
 #endif
+        exit(1);
 
 #if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
