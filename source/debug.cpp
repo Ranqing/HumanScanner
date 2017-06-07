@@ -420,7 +420,7 @@ void Debugger::fast_check_by_diff(const string diffname, const int diff_thresh) 
 
     unsigned char * diff = (unsigned char *)mat_diff_disp.ptr<unsigned char>(0);
     unsigned char * pmsk = (unsigned char *)(mat_mask_l.ptr<unsigned char>(0));
-    vector<float>&  disp = m_stereo_fl->get_disp_l();
+    vector<float>&  disp = m_stereo_fl->get_disp();
 
     int idx = 0;
     for(int y = 0; y < m_h; ++y) {
