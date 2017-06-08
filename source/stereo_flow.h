@@ -11,8 +11,8 @@
 
 class MatchHash;
 
-const float c_thresh_zncc  = 0.95;	//0.85,1.15
-const float c_thresh_prior = 1.35;
+const float c_thresh_zncc  = 0.85;	//0.85,1.15
+const float c_thresh_prior = 1.20;
 const float c_thresh_e_zncc  = 0.5;
 const float c_thresh_e_prior = 1.02;
 

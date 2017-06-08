@@ -2,9 +2,7 @@
 #include "stereo_flow.h"
 #include "debug.h"
 
-#include "../../Qing/qing_image.h"
 #include "../../Qing/qing_ply.h"
-#include "../../Qing/qing_macros.h"
 
 bool HumanBodyScanner::init()
 {
@@ -120,12 +118,6 @@ void HumanBodyScanner::load_and_crop_images()
     imwrite(m_out_dir + "/crop_mskL.jpg", m_mskL);
     imwrite(m_out_dir + "/crop_mskR.jpg", m_mskR);
 #endif
-
-    //normalize image format and values
-    //    cvtColor(m_imgL, m_imgL, CV_BGR2RGB);
-    //    cvtColor(m_imgR, m_imgR, CV_BGR2RGB);
-    //    m_imgL.convertTo(m_imgL, CV_32F, 1/255.0f);
-    //    m_imgR.convertTo(m_imgR, CV_32F, 1/255.0f);
 }
 
 void HumanBodyScanner::build_stereo_pyramid()
@@ -142,13 +134,15 @@ void HumanBodyScanner::build_stereo_pyramid()
 
     int t_max_disp = m_max_disp;
     int t_min_disp = m_min_disp;
-    int t_wnd_sz = QING_WND_SIZE;
+    int t_wnd_sz;
     float t_disp_scale = (m_max_disp <= 255) ? (255/m_max_disp) : min((255.f/m_max_disp), 0.5f);
-
 
     for(int p = 0; p < m_max_levels; ++p) {
         int w = t_imgL.size().width;
         int h = t_imgR.size().height;
+
+        if(max(w,h) > 1000) t_wnd_sz = QING_WND_SIZE + 4;
+        else t_wnd_sz = QING_WND_SIZE;
 
         if( w < MIN_IMG_SIZE || h < MIN_IMG_SIZE || t_max_disp < MIN_DISP_VALUE) {
             m_max_levels = p;
@@ -167,11 +161,10 @@ void HumanBodyScanner::build_stereo_pyramid()
             m_stereo_pyramid[p]->calc_mean_images();
         }
 
-        //downsample
+        //down-sample
         t_max_disp = t_max_disp * 0.5;
         t_min_disp = t_min_disp * 0.5;
         t_disp_scale = min(t_disp_scale * 2, 1.f);
-        t_wnd_sz = t_wnd_sz;
 
 #if DEBUG
         if(p) {
@@ -205,16 +198,16 @@ void HumanBodyScanner::build_stereo_costvol() {
         printf("\tlevel = %d\t", p);
         m_stereo_pyramid[p]->matching_cost();
         printf( "\tmatching cost volume computation: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );   // the elapsed time in sec
-        exit(1);
     }
     cout << "\ncost volume pyramid building finished." << endl;
+    exit(1);
 
 }
 
 void HumanBodyScanner::match()
 {
     build_stereo_pyramid();    //build image pyramid
-    build_stereo_costvol();    //compute hirerchical matching cost volume
+ //   build_stereo_costvol();    //compute hirerchical matching cost volume
 
     for(int p = m_max_levels - 1; p >= 1; --p) {
         //support window size: 5 -> 7 -> 9 -> 11
@@ -246,8 +239,12 @@ void HumanBodyScanner::match()
         m_debugger->fast_check_by_diff("diff_init_" + qing_int_2_string(p) + ".jpg");
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
+
+        //no propagation and re-match
 #endif
-        exit(1);
+        if(1 < p) continue;
+        else exit(1);
+
 
         /*---------------------------------------------------------------------------------------------------------------------*/
         /*                                              propagation                                                            */

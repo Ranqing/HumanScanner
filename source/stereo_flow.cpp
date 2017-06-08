@@ -4,21 +4,14 @@
 #include "cost/tad.h"
 #include "aggr/bf_aggr.h"
 #include "aggr/box_aggr.h"
-#include "aggr/gf_aggr.h"
 #include "qx_upsampling/qx_zdepth_upsampling_using_rbf.h"
 #include "hashmap.h"
 
 
-#include "../../Qing/qing_basic.h"
-#include "../../Qing/qing_disp.h"
 #include "../../Qing/qing_timer.h"
-#include "../../Qing/qing_image.h"
 #include "../../Qing/qing_memory.h"
-#include "../../Qing/qing_macros.h"
 #include "../../Qing/qing_median_filter.h"
 #include "../../Qing/qing_matching_cost.h"
-#include "../../Qing/qing_aggregation.h"
-#include "../../Qing/qing_ply.h"
 
 
 const CCType CCNAME = zncc;
@@ -56,15 +49,13 @@ void StereoFlow::calc_mean_images() {
 
     //float [0,255]
     Mat meanL, meanR;
-    m_mat_mean_l.convertTo(meanL, CV_32FC1);
-    qing_img_2_vec<float>(meanL, m_mean_l);             //imshow("mean_l", m_mat_mean_l); waitKey(0); destroyWindow("mean_l");
-    m_mat_mean_r.convertTo(meanR, CV_32FC1);
-    qing_img_2_vec<float>(meanR, m_mean_r);             //imshow("mean_r", m_mat_mean_r); waitKey(0); destroyWindow("mean_r");
+    m_mat_mean_l.convertTo(meanL, CV_32FC1); qing_img_2_vec<float>(meanL, m_mean_l);             //imshow("mean_l", m_mat_mean_l); waitKey(0); destroyWindow("mean_l");
+    m_mat_mean_r.convertTo(meanR, CV_32FC1); qing_img_2_vec<float>(meanR, m_mean_r);             //imshow("mean_r", m_mat_mean_r); waitKey(0); destroyWindow("mean_r");
 
-# if 1
-    m_ncc_mean_l.resize(m_total); copy(m_mean_l.begin(), m_mean_l.end(), m_ncc_mean_l.begin());
-    m_ncc_mean_r.resize(m_total); copy(m_mean_r.begin(), m_mean_r.end(), m_ncc_mean_r.begin());
-    cout << "\tmean image with default_ncc_wnd done...." << endl;
+# if 0
+ //   m_ncc_mean_l.resize(m_total); copy(m_mean_l.begin(), m_mean_l.end(), m_ncc_mean_l.begin());
+ //   m_ncc_mean_r.resize(m_total); copy(m_mean_r.begin(), m_mean_r.end(), m_ncc_mean_r.begin());
+ //   cout << "\tmean image with default_ncc_wnd done...." << endl;
 # endif
 }
 
@@ -76,8 +67,10 @@ void StereoFlow::calc_cost_vol() {
     if(m_cost_mtd) {
 # if 1
         cout << "\tusing ncc mean image...." << endl;
-        m_cost_mtd->build_cost_vol_l(m_gray_l, m_gray_r, m_ncc_mean_l, m_ncc_mean_r, m_mask_l, m_mask_r, m_cost_vol_l);
-        m_cost_mtd->build_cost_vol_r(m_gray_l, m_gray_r, m_ncc_mean_l, m_ncc_mean_r, m_mask_l, m_mask_r, m_cost_vol_r);
+      //  m_cost_mtd->build_cost_vol_l(m_gray_l, m_gray_r, m_ncc_mean_l, m_ncc_mean_r, m_mask_l, m_mask_r, m_cost_vol_l);
+      //  m_cost_mtd->build_cost_vol_r(m_gray_l, m_gray_r, m_ncc_mean_l, m_ncc_mean_r, m_mask_l, m_mask_r, m_cost_vol_r);
+        m_cost_mtd->build_cost_vol_l(m_gray_l, m_gray_r, m_mean_l, m_mean_r, m_mask_l, m_mask_r, m_cost_vol_l);
+        m_cost_mtd->build_cost_vol_r(m_gray_l, m_gray_r, m_mean_l, m_mean_r, m_mask_l, m_mask_r, m_cost_vol_r);
 #else
         m_cost_mtd->build_cost_vol_l(m_gray_l, m_gray_r, m_mean_l, m_mean_r, m_mask_l, m_mask_r, m_cost_vol_l);
         m_cost_mtd->build_cost_vol_r(m_gray_l, m_gray_r, m_mean_l, m_mean_r, m_mask_l, m_mask_r, m_cost_vol_r);
@@ -192,7 +185,7 @@ void StereoFlow::calc_init_disparity() {                                        
     m_aggr_mtd = set_aggr_type(CANAME);
 
     calc_cost_vol();
-//    aggr_cost_vol();
+    aggr_cost_vol();
 
     cout << "\tcost volume calculation done..." << endl;
     set_disp_by_wta();
@@ -387,7 +380,7 @@ void StereoFlow::calc_seed_disparity() {                                        
         for(int x = 0; x < m_w; ++x) {
             int idx = y * m_w + x;
             if( 0==m_mask_l[idx] ) continue;
-            if( /*m_best_mcost[idx] > c_thresh_zncc &&*/ m_best_prior[idx] > c_thresh_prior )
+            if( m_best_mcost[idx] > c_thresh_zncc && m_best_prior[idx] > c_thresh_prior )
             {
                 m_seed_disp[idx] = m_disp[idx];
                 cnt ++;
@@ -1153,7 +1146,7 @@ void StereoFlow::matching_cost() {
 
     qing_allocf_3(m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
     matching_cost_from_zncc();
-# if 1
+# if 0
     string mcost_folder = "./matching-cost-ncc/";
     qing_create_dir(mcost_folder);
     string filename ;
@@ -1165,40 +1158,58 @@ void StereoFlow::matching_cost() {
                 temp_mcost[idx++] = m_hwd_costvol_l[y][x][d];
             }
         }
-        filename = mcost_folder + "zncc_" + qing_int_2_string(d) + ".jpg";
-        qing_save_mcost_jpg(filename, temp_mcost, m_w, m_h);
         filename = mcost_folder + "zncc_" + qing_int_2_string(d) + ".txt";
         qing_save_mcost_txt(filename, temp_mcost, m_total, m_w);
     }
 # endif
-   // qing_allocf_3(m_hwd_costvol_r, m_h, m_w, m_disp_ranges+1);
-   // qing_stereo_flip_cost_vol(m_hwd_costvol_r, m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
+    qing_allocf_3(m_hwd_costvol_r, m_h, m_w, m_disp_ranges+1);
+    qing_stereo_flip_cost_vol(m_hwd_costvol_r, m_hwd_costvol_l, m_h, m_w, m_disp_ranges+1);
 
-# if 0
-    qing_depth_best_cost(m_disp_l, m_hwd_costvol_l, m_h, m_w, m_disp_ranges + 1);
+# if 1
+    qing_depth_max_cost(m_disp_l, m_hwd_costvol_l, m_h, m_w, m_disp_ranges + 1);
     Mat uimg(m_h, m_w, CV_8UC1, Scalar(0));
     qing_float_vec_2_uchar_img(m_disp_l, m_scale, uimg);
-    imwrite("mcost_disp.jpg", uimg);
+    imwrite("mcost_disp_l.jpg", uimg);
+    qing_depth_max_cost(m_disp_r, m_hwd_costvol_r, m_h, m_w, m_disp_ranges + 1);
+    qing_float_vec_2_uchar_img(m_disp_r, m_scale, uimg);
+    imwrite("mcost_disp_r.jpg", uimg);
 # endif
 }
 
 void StereoFlow::matching_cost_from_zncc() {
 
     //pre-computation of ncc vectors
+    cout << m_wnd_size << endl;
     int wndsz2 = m_wnd_size * m_wnd_size;
     m_ncc_vecs_l.clear(); qing_allocf_3(m_ncc_vecs_l, m_h, m_w, wndsz2);
     m_ncc_vecs_r.clear(); qing_allocf_3(m_ncc_vecs_r, m_h, m_w, wndsz2);
 
-    qing_compute_ncc_vecs(m_ncc_vecs_l, m_gray_l, m_mean_l, m_h, m_w, m_wnd_size);
-    qing_compute_ncc_vecs(m_ncc_vecs_r, m_gray_r, m_mean_r, m_h, m_w, m_wnd_size);
+    qing_compute_ncc_vecs(m_ncc_vecs_l, m_gray_l, m_mean_l, m_mask_l, m_h, m_w, m_wnd_size);
+    qing_compute_ncc_vecs(m_ncc_vecs_r, m_gray_r, m_mean_r, m_mask_r, m_h, m_w, m_wnd_size);
 
-    for(int i = 0; i < m_disp_ranges + 1; i++) {
-        //compute matching cost
+    for(int i = 0; i <= m_disp_ranges; ++i) {
         for(int y = 0; y < m_h; ++y) {
-            for(int x = 0; x < i; ++x)
+            for(int x = 0; x < i; ++x) {
                 m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][0]);
-            for(int x = i; x < m_w; ++x)
-                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][x-i]);
+            }
+            for(int x = i; x < m_w; ++x) {
+                m_hwd_costvol_l[y][x][i] = qing_ncc_value(m_ncc_vecs_l[y][x], m_ncc_vecs_r[y][x - i]);
+
+# if 0
+                if(y==6&&i==14&&x>120&&x<140) {
+                    cout << x << ": " << endl;
+                    for(int m = 0; m < wndsz2 ; ++m) {
+                        cout << m_ncc_vecs_l[y][x][m] << ' ' ;
+                    }
+                    cout << endl;
+                    for(int m = 0; m < wndsz2 ; ++m) {
+                        cout << m_ncc_vecs_r[y][x-i][m] << ' ' ;
+                    }
+                    cout << endl;
+                    cout << m_hwd_costvol_l[y][x][i] << endl << endl;
+                }
+# endif
+            }
         }
     }
 }
