@@ -43,6 +43,9 @@ private:
     vector<vector<vector<float> > > m_hwd_costvol_l, m_hwd_costvol_r;
     vector<vector<vector<float> > > m_ncc_vecs_l, m_ncc_vecs_r;                                   //each pixel's ncc vector
 
+    int removal_isolated_seeds(const int& rsize, const int& thresh);
+    int removal_boundary_seeds(const int& rsize);
+
     void matching_cost_from_zncc();
     double compute_data_item(double& ddata, double& dweight, const int& y, const int& x, const float& tstep);
     bool compute_smooth_item(double& sdata, double& sweight, const int& y, const int& x,  const double& epsilon);

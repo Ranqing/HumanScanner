@@ -210,11 +210,6 @@ void HumanBodyScanner::match()
  //   build_stereo_costvol();    //compute hirerchical matching cost volume
 
     for(int p = m_max_levels - 1; p >= 1; --p) {
-        //support window size: 5 -> 7 -> 9 -> 11
-        //int wnd_sz = 2 * cnt + 1;
-
-        //m_stereo_pyramid[p]->set_wnd_size(wnd_sz);
-        //m_stereo_pyramid[p]->calc_mean_images();
         m_stereo_pyramid[p]->set_patch_params(QING_WND_SIZE);
         m_stereo_pyramid[p]->calc_support_region();
         //m_stereo_pyramid[p]->set_voting_params(wnd_sz); //can be replaced by median filtering
@@ -239,11 +234,9 @@ void HumanBodyScanner::match()
         m_debugger->fast_check_by_diff("diff_init_" + qing_int_2_string(p) + ".jpg");
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
-
-        //no propagation and re-match
 #endif
-        if(1 < p) continue;
-        else exit(1);
+     //   if(1 < p) continue;
+     //   else exit(1);
 
 
         /*---------------------------------------------------------------------------------------------------------------------*/
@@ -285,7 +278,7 @@ void HumanBodyScanner::match()
         m_debugger->fast_check_by_diff("diff_rematch_" + qing_int_2_string(p) + ".jpg");
 #endif
 #endif
-        exit(1);
+      //  exit(1);
 
 #if 0
         /*--------------------------------------------------------------------------------------------------------------------*/

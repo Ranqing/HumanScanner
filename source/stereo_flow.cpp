@@ -66,7 +66,7 @@ void StereoFlow::calc_support_region() {
 void StereoFlow::calc_cost_vol() {
     if(m_cost_mtd) {
 # if 1
-        cout << "\tusing ncc mean image...." << endl;
+      //  cout << "\tusing ncc mean image...." << endl;
       //  m_cost_mtd->build_cost_vol_l(m_gray_l, m_gray_r, m_ncc_mean_l, m_ncc_mean_r, m_mask_l, m_mask_r, m_cost_vol_l);
       //  m_cost_mtd->build_cost_vol_r(m_gray_l, m_gray_r, m_ncc_mean_l, m_ncc_mean_r, m_mask_l, m_mask_r, m_cost_vol_r);
         m_cost_mtd->build_cost_vol_l(m_gray_l, m_gray_r, m_mean_l, m_mean_r, m_mask_l, m_mask_r, m_cost_vol_l);
@@ -387,8 +387,70 @@ void StereoFlow::calc_seed_disparity() {                                        
             }
         }
     }
+    cout << '\t' << cnt << " seeds / " << max(m_valid_pixels_l, m_valid_pixels_r) << " pixels.";
 
-    cout << '\t' << cnt << " seeds / " << max(m_valid_pixels_l, m_valid_pixels_r) << " pixels."<< endl;
+    //remove isolated seed matches
+    //divide image into a set of 11x11 squares, at least 2 seeds should be inside, otherwise remove seeds in this square
+    cnt = removal_isolated_seeds(11, 11);
+    cout << "\n\tafter isolated seeds removal: " << cnt << " seeds. " << endl;
+    cnt = removal_boundary_seeds(11);
+    cout << "\n\tafter boundary seeds removal: " << cnt << " seeds. " << endl;
+}
+
+int StereoFlow::removal_isolated_seeds(const int& rsize, const int& thresh) {
+    int sw = (m_w+rsize-1)/rsize;
+    int sh = (m_h+rsize-1)/rsize;
+    int stotal = sh * sw, sidx, idx = -1, cnt = 0;
+
+    // cout << "\t" << m_w << " x " << m_h << " -> devided into " << sw << " x " << sh << endl;
+    vector<int> seeds_cnt(stotal, 0);
+    for(int y = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if (0 == m_mask_l[++idx]) continue;
+            if (0 == m_seed_disp[idx]) continue;
+
+            int sx = x / rsize;
+            int sy = y / rsize;
+            sidx = sy * sw + sx;
+            seeds_cnt[sidx]++;
+        }
+    }
+
+    sidx = -1; cnt = 0;
+    for(int sy = 0; sy < sh; ++sy) {
+        for(int sx = 0; sx < sw; ++sx) {
+            if(seeds_cnt[++sidx] < 10) {
+                for(int y = sy * rsize; y < (sy+1) * rsize; ++y ) {
+                    for(int x = sx * rsize; x < (sx+1) * rsize; ++x) {
+                        m_seed_disp[y*m_w+x] = 0.f;
+                    }
+                }
+            }
+            else{
+                cnt += seeds_cnt[sidx];
+            }
+        }
+    }
+    return cnt;
+}
+
+int StereoFlow::removal_boundary_seeds(const int &rsize) {
+    int idx = -1, offset = 0, cnt = 0;
+    for(int y = 0; y < m_h; ++y ) {
+        for(int x = 0; x < m_w; ++x) {
+
+            if (0 == m_seed_disp[++idx]) continue;
+
+            offset = 0;
+            while (offset < rsize) {
+                if (0 == m_mask_l[idx + offset] || 0 == m_mask_l[idx - offset]) break;
+                offset++;
+            }
+            if (offset < rsize) m_seed_disp[idx] = 0;
+            else cnt++;
+        }
+    }
+    return cnt;
 }
 
 void StereoFlow::cross_validation() {
@@ -423,7 +485,6 @@ void StereoFlow::cross_validation() {
 void StereoFlow::disp_2_matches() {
     m_matches_l.clear(); m_matches_l.reserve(m_total * 0.2);
     m_matches_r.clear(); m_matches_r.reserve(m_total * 0.2);
-
 
     for(int y = 0; y < m_h; ++y) {
         for(int x = 0; x < m_w; ++x) {
