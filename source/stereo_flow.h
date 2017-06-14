@@ -42,6 +42,7 @@ public:
 private:
     vector<vector<vector<float> > > m_hwd_costvol_l, m_hwd_costvol_r;
     vector<vector<vector<float> > > m_ncc_vecs_l, m_ncc_vecs_r;                                   //each pixel's ncc vector
+    vector<float> m_seed_prior;                                                                   //priority of seed matches
 
     int removal_isolated_seeds(const int& rsize, const int& thresh);
     int removal_boundary_seeds(const int& rsize);

@@ -391,7 +391,8 @@ void Debugger::fast_check_disp_by_depth(const string filename, float * mdisp) {
 
     vector<Vec3f> points, colors;
     qing_disp_2_depth(points, colors, pdsp, pmsk, pclr, qmtx, m_crop_l, m_w, m_h );
-    qing_write_point_color_ply(filename, points, colors);
+
+    qing_write_point_color_ply(m_save_dir + "/" + filename, points, colors);
     cout << "debug:\tsaving.." << filename << "\t" << points.size() << " points. " << endl;
 }
 
@@ -422,7 +423,7 @@ void Debugger::fast_check_by_histogram(const string histname, int disp_range, in
         line(hist_img, Point( bin_w*(i-1), hist_h - p_disp_hist[(i-1)] ), Point(bin_w*(i), hist_h - p_disp_hist[(i)] ), Scalar(255), 2, 8, 0 );
     }
 
-    imwrite(histname, hist_img);
+    imwrite(m_save_dir + "/" + histname, hist_img);
     cout << "saving " << histname << endl;
 }
 
@@ -435,18 +436,26 @@ void Debugger::fast_check_by_diff(const string diffname, const int diff_thresh) 
     unsigned char * diff = (unsigned char *)mat_diff_disp.ptr<unsigned char>(0);
     unsigned char * pmsk = (unsigned char *)(mat_mask_l.ptr<unsigned char>(0));
     vector<float>&  disp = m_stereo_fl->get_disp();
+    int maxval = 0;
 
     int idx = 0;
     for(int y = 0; y < m_h; ++y) {
         for(int x = 1; x < m_w; ++x) {
             idx ++;
             if(255!=pmsk[idx]) continue;
-            if(abs(disp[idx] - disp[idx-1]) > diff_thresh) diff[idx] = 255;
+            if(abs(disp[idx] - disp[idx-1]) > diff_thresh) {
+                diff[idx] = abs(disp[idx] - disp[idx-1]);
+                maxval = max((int)diff[idx], maxval);
+            } //adjacent pixels exceeds 1 disparity
+
         }
     }
 
-    imwrite(diffname, mat_diff_disp);
-    cout << "saving " << diffname << endl;
+    cout << "debug: maxval = " << maxval ;
+    mat_diff_disp.convertTo(mat_diff_disp, CV_8UC1, 255/maxval);
+
+    imwrite(m_save_dir + "/" + diffname, mat_diff_disp);
+    cout << "\tsaving " << diffname << endl;
 }
 
 void Debugger::compare_init_final_disp(const int level) {

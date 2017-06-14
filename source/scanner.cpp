@@ -235,8 +235,8 @@ void HumanBodyScanner::match()
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
 #endif
-     //   if(1 < p) continue;
-     //   else exit(1);
+   //     if(1 < p) continue;
+   //     else exit(1);
 
 
         /*---------------------------------------------------------------------------------------------------------------------*/
@@ -249,6 +249,8 @@ void HumanBodyScanner::match()
         m_stereo_pyramid[p]->seed_propagate(1);                                    //right->left propatation
         m_stereo_pyramid[p]->matches_2_disp();                                     //matches to disparity
         m_stereo_pyramid[p]->cross_validation();                                   //crosss check
+        // m_stereo_pyramid[p]->check_ordering();
+
         printf( "\n\t--------------------------------------------------------\n" );
         printf( "\texpansion: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
         printf( "\t--------------------------------------------------------\n" );
@@ -258,6 +260,9 @@ void HumanBodyScanner::match()
         m_debugger->fast_check_by_diff("diff_prop_" + qing_int_2_string(p) + ".jpg");
 #endif
 
+       if(p > 1) continue;
+       else
+           exit(1);
 
 #if 1
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -357,7 +362,7 @@ void HumanBodyScanner::match()
 
 #if DEBUG
          m_debugger->compare_init_final_disp(p);
-         m_debugger->fast_check_by_diff("qing_fast_diff_" + qing_int_2_string(p) + ".jpg", 1);
+         m_debugger->fast_check_by_diff("diff_final_" + qing_int_2_string(p) + ".jpg", 1);
 #endif
 
 #if 0
@@ -374,6 +379,8 @@ void HumanBodyScanner::match()
 #endif
 #endif
     }
+
+    exit(1);
 
     //copy disparity results from stereo pyramid
     copy_disp_from_stereo();

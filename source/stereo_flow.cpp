@@ -372,8 +372,9 @@ void StereoFlow::calc_seed_disparity() {                                        
 
     cross_validation();
 
-    m_seed_disp.resize(m_total);
-    memset(&m_seed_disp.front(), 0, sizeof(float)*m_total);
+    m_seed_disp.resize(m_total, 0.f);
+    //memset(&m_seed_disp.front(), 0, sizeof(float)*m_total);
+    m_seed_prior.resize(m_total,0.f);
 
     int cnt = 0;
     for(int y = 0; y < m_h; ++y) {
@@ -383,6 +384,7 @@ void StereoFlow::calc_seed_disparity() {                                        
             if( m_best_mcost[idx] > c_thresh_zncc && m_best_prior[idx] > c_thresh_prior )
             {
                 m_seed_disp[idx] = m_disp[idx];
+                m_seed_prior[idx] = m_best_prior[idx];
                 cnt ++;
             }
         }
@@ -401,6 +403,7 @@ int StereoFlow::removal_isolated_seeds(const int& rsize, const int& thresh) {
     int sw = (m_w+rsize-1)/rsize;
     int sh = (m_h+rsize-1)/rsize;
     int stotal = sh * sw, sidx, idx = -1, cnt = 0;
+    cout << m_total << endl;
 
     // cout << "\t" << m_w << " x " << m_h << " -> devided into " << sw << " x " << sh << endl;
     vector<int> seeds_cnt(stotal, 0);
@@ -420,9 +423,10 @@ int StereoFlow::removal_isolated_seeds(const int& rsize, const int& thresh) {
     for(int sy = 0; sy < sh; ++sy) {
         for(int sx = 0; sx < sw; ++sx) {
             if(seeds_cnt[++sidx] < 10) {
-                for(int y = sy * rsize; y < (sy+1) * rsize; ++y ) {
-                    for(int x = sx * rsize; x < (sx+1) * rsize; ++x) {
+                for(int y = sy * rsize; y < min((sy+1) * rsize,m_h); ++y ) {
+                    for(int x = sx * rsize; x < min((sx+1) * rsize,m_w); ++x) {
                         m_seed_disp[y*m_w+x] = 0.f;
+                        m_seed_prior[y*m_w+x] = 0.f;
                     }
                 }
             }
@@ -446,7 +450,10 @@ int StereoFlow::removal_boundary_seeds(const int &rsize) {
                 if (0 == m_mask_l[idx + offset] || 0 == m_mask_l[idx - offset]) break;
                 offset++;
             }
-            if (offset < rsize) m_seed_disp[idx] = 0;
+            if (offset < rsize) {
+                m_seed_disp[idx] = 0;
+                m_seed_prior[idx] = 0;
+            }
             else cnt++;
         }
     }
@@ -538,7 +545,44 @@ void StereoFlow::matches_2_disp() {
     cout << "\n\tmatches to disparity done...." << endl;
 }
 
+//1. photometric constraint
+//2. local smoothness constraint
+//3. left-right cross check constraint
+//4. ordering constraint
+//5. propagation video
 void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, MatchHash *&hashmap) {
+
+# if 0
+    float vw_scale = 1.f;
+    int vw_w = vw_scale * m_w;
+    int vw_h = vw_scale * m_h;
+    string videoname = "debug_propagate_" + qing_int_2_string(direction) + ".mp4";
+    VideoWriter vw(videoname, CV_FOURCC('X','2','6','4'), 30.0, Size(2 * vw_w,vw_h) );
+    if(false==vw.isOpened()) {
+        cout << "failed to open video write..." << endl;
+        return;
+    }
+    int cnt = 0;
+    Mat db_disp(Size(m_w,m_h), CV_8UC1);
+    Mat db_disp_3(Size(m_w,m_h),CV_8UC3);
+    Mat s_db_disp_3(Size(vw_w, vw_h), CV_8UC3);
+    bool is_prop = false;
+
+    vector<float> disp_vec(m_total, 0.f);
+    copy(m_seed_disp.begin(), m_seed_disp.end(), disp_vec.begin());
+    qing_float_vec_2_uchar_img(m_seed_disp, m_scale, db_disp);
+    cvtColor(db_disp, db_disp_3, CV_GRAY2BGR);
+
+    Mat db_prior_3(Size(m_w,m_h), CV_8UC3);
+    Mat s_db_prior_3(Size(vw_w, vw_h), CV_8UC3);
+
+    vector<float> prior_vec(m_total, 0.f);
+    copy(m_seed_prior.begin(), m_seed_prior.end(), prior_vec.begin());
+    float maxval = 2.f, nonval = 0.f;
+    qing_apply_colormap_jet(db_prior_3, prior_vec, m_total, maxval, nonval);
+
+    Mat vw_canvas(Size(2*vw_w, vw_h), CV_8UC3);
+# endif
 
     while(!queue.empty()) {
         Match t_match = queue.top();
@@ -565,7 +609,24 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
         MatchValue t_value(t_match.get_d(), t_match.get_mcost(), t_match.get_prior());
 
         if( false == hashmap->max_store(t_key, t_value, 1) ) continue;
-        //hashmap->parse();
+# if 0
+        cnt++;
+        if(0==cnt%30) {
+            is_prop = hashmap->db_parse(disp_vec, prior_vec, m_w, m_h, m_total);
+            if(is_prop) {
+                qing_float_vec_2_uchar_img(disp_vec, m_scale, db_disp);
+                cvtColor(db_disp, db_disp_3, CV_GRAY2BGR);
+                qing_apply_colormap_jet(db_prior_3, prior_vec, m_total, maxval, nonval);
+
+                cv::resize(db_disp_3, s_db_disp_3, s_db_disp_3.size());
+                cv::resize(db_prior_3, s_db_prior_3, s_db_prior_3.size());
+                s_db_disp_3.copyTo(vw_canvas(Rect(0,0,vw_w, vw_h)));
+                s_db_prior_3.copyTo(vw_canvas(Rect(vw_w, 0, vw_w, vw_h)));
+
+                vw.write(vw_canvas);
+            }
+        }
+# endif
 
         int cnt = 0, offset = 1, total = (2*offset+1)*(2*offset+1), cur_l_idx, cur_r_idx;
         float cur_lx, cur_ly, cur_rx, cur_ry;
@@ -589,7 +650,7 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
 
                 if(0==m_mask_l[cur_l_idx] || 0==m_mask_r[cur_r_idx]) continue;
 
-                vector<float> mcosts(2*offset + 1, -1.f);
+                vector<float> mcosts(3, -1.f);
 
                 if(0==direction)
                     calc_cluster_costs_l(k-1, k+1, cur_lx, cur_ly, mcosts);
@@ -605,7 +666,6 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
 
                 if(max_mcost >= c_thresh_e_zncc && prior >= c_thresh_e_prior) {
                     float d = qing_k_2_disp(m_max_disp, m_min_disp, maxk+k-1);
-
                     if(0==direction)
                         neighbors.push_back(Match(cur_lx, cur_ly, d, max_mcost, prior));
                     else
@@ -618,17 +678,23 @@ void StereoFlow::propagate(const int direction, priority_queue<Match> &queue, Ma
 
         if(cnt * 2 >= total) {
             for(int i = 0; i < cnt; ++i) queue.push(neighbors[i]);
+
         }
     }
+
+#if 0
+    cout << "\t" << cnt << " times propagation...check " << videoname << endl;
+    vw.release();
+#endif
 }
 
 //propagate
 void StereoFlow::seed_propagate(const int direction) {
 
     if(0==direction)  //left->right
-        cout << "\n\tpropagation in left image according best-first ncc strategy..."  ;
+        cout << "\n\tpropagation in left image - best-first ncc strategy - start."  ;
     else
-        cout << "\n\tpropagation in right image according best-first ncc strategy..." ;
+        cout << "\n\tpropagation in right image - best-first ncc strategy - start." ;
 
     MatchHash * hashmap = new MatchHash();
     if(NULL==hashmap) {
@@ -646,7 +712,6 @@ void StereoFlow::seed_propagate(const int direction) {
         copy(m_matches_r.begin(), m_matches_r.end(), seeds.begin());
     }
 
-    cout << "\tstart propagation..." ;
     priority_queue<Match> prior_queue;
     for(int i = 0, sz = seeds.size(); i < sz; ++i) {
         prior_queue.push(seeds[i]);
@@ -668,7 +733,7 @@ void StereoFlow::seed_propagate(const int direction) {
     propagate(direction, prior_queue, hashmap);
     cout << "\tafter propagation: " << hashmap->get_num_of_keys() << " matches..." << endl;
 
-    if(0==direction)    hashmap->copy_to(m_matches_l);
+    if(0==direction)  hashmap->copy_to(m_matches_l);
     else hashmap->copy_to(m_matches_r);
 }
 
