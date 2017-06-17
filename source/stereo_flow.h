@@ -39,6 +39,9 @@ public:
     void matching_cost();
     void beeler_disp_refinement();
 
+    void removal_isolated_propagation();
+    void check_ordering();
+
 private:
     vector<vector<vector<float> > > m_hwd_costvol_l, m_hwd_costvol_r;
     vector<vector<vector<float> > > m_ncc_vecs_l, m_ncc_vecs_r;                                   //each pixel's ncc vector
@@ -46,6 +49,8 @@ private:
 
     int removal_isolated_seeds(const int& rsize, const int& thresh);
     int removal_boundary_seeds(const int& rsize);
+
+    int removal_isolated_disparities(vector<float>& disp, vector<int>& bestk, vector<float>& mcost, vector<float>& prior, const vector<uchar>& mask, const int& rsize, const int& thresh);
 
     void matching_cost_from_zncc();
     double compute_data_item(double& ddata, double& dweight, const int& y, const int& x, const float& tstep);

@@ -396,14 +396,14 @@ void StereoFlow::calc_seed_disparity() {                                        
     cnt = removal_isolated_seeds(11, 11);
     cout << "\n\tafter isolated seeds removal: " << cnt << " seeds. " << endl;
     cnt = removal_boundary_seeds(11);
-    cout << "\n\tafter boundary seeds removal: " << cnt << " seeds. " << endl;
+    cout << "\tafter boundary seeds removal: " << cnt << " seeds. " << endl;
 }
 
 int StereoFlow::removal_isolated_seeds(const int& rsize, const int& thresh) {
     int sw = (m_w+rsize-1)/rsize;
     int sh = (m_h+rsize-1)/rsize;
     int stotal = sh * sw, sidx, idx = -1, cnt = 0;
-    cout << m_total << endl;
+  //  cout << m_total << endl;
 
     // cout << "\t" << m_w << " x " << m_h << " -> devided into " << sw << " x " << sh << endl;
     vector<int> seeds_cnt(stotal, 0);
@@ -455,6 +455,48 @@ int StereoFlow::removal_boundary_seeds(const int &rsize) {
                 m_seed_prior[idx] = 0;
             }
             else cnt++;
+        }
+    }
+    return cnt;
+}
+
+int StereoFlow::removal_isolated_disparities(vector<float>& disp, vector<int>& bestk, vector<float>& mcost, vector<float>& prior, const vector<uchar>& mask, const int& rsize, const int& thresh) {
+    int sw = (m_w+rsize-1)/rsize;
+    int sh = (m_h+rsize-1)/rsize;
+    int stotal = sh * sw, sidx, idx = -1, cnt = 0;
+  //  cout << m_total << endl;
+
+    // cout << "\t" << m_w << " x " << m_h << " -> devided into " << sw << " x " << sh << endl;
+    vector<int> disps_cnt(stotal, 0);
+    for(int y = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w; ++x) {
+            if (0 == mask[++idx]) continue;
+            if (0 == disp[idx]) continue;
+
+            int sx = x / rsize;
+            int sy = y / rsize;
+            sidx = sy * sw + sx;
+            disps_cnt[sidx]++;
+        }
+    }
+
+    sidx = -1; cnt = 0;
+    for(int sy = 0; sy < sh; ++sy) {
+        for(int sx = 0; sx < sw; ++sx) {
+            if(disps_cnt[++sidx] < 10) {
+                for(int y = sy * rsize; y < min((sy+1) * rsize,m_h); ++y ) {
+                    for(int x = sx * rsize; x < min((sx+1) * rsize,m_w); ++x) {
+                        idx = y * m_w + x;
+                        disp[idx] = 0.f;
+                        bestk[idx] = 0;
+                        mcost[idx] = 0.f;
+                        prior[idx] = 0.f;
+                    }
+                }
+            }
+            else{
+                cnt += disps_cnt[sidx];
+            }
         }
     }
     return cnt;
@@ -513,6 +555,8 @@ void StereoFlow::matches_2_disp() {
     memset(&m_disp_l.front(), 0.f, sizeof(float) * m_total);
     memset(&m_disp_r.front(), 0.f, sizeof(float) * m_total);
 
+    int cnt = 0;
+
     for(int i = 0, sz = m_matches_l.size(); i < sz; ++i) {
         Match tmatch = m_matches_l[i];
         float lx = tmatch.get_x();
@@ -543,6 +587,16 @@ void StereoFlow::matches_2_disp() {
         m_best_prior_r[idx] = prior;
     }
     cout << "\n\tmatches to disparity done...." << endl;
+}
+
+void StereoFlow::removal_isolated_propagation() {
+    int cnt ;
+
+    cnt = removal_isolated_disparities(m_disp_l, m_best_k_l, m_best_mcost_l, m_best_prior_l, m_mask_l, 5,10);
+    cout << "\tafter isolated disparities removal: left - " << cnt << " matches." << endl;
+
+    cnt = removal_isolated_disparities(m_disp_r, m_best_k_r, m_best_mcost_r, m_best_prior_r, m_mask_r, 5,10);
+    cout << "\tafter isolated disparities removal: right - " << cnt << " matches." << endl;
 }
 
 //1. photometric constraint
@@ -846,6 +900,7 @@ void StereoFlow::re_match_l() {
 
         for(int x = 0; x < m_w; ++x) {
             if(0==m_mask_l[idx] || 0!=m_disp_l[idx]) {idx++;continue;}
+
             int st_k, ed_k, range;
             if(-1==border0[x] || -1==border1[x]) {
                 st_k = 1; ed_k = m_disp_ranges;
@@ -883,6 +938,7 @@ void StereoFlow::re_match_r() {
 
         for(int x = 0; x < m_w; ++x) {
             if(0==m_mask_r[idx] || 0!=m_disp_r[idx]) {idx++; continue;}
+
             int st_k, ed_k, range;
             if(-1==border0[x] || -1==border1[x]) {
                 st_k = 1; ed_k = m_disp_ranges;
@@ -1438,6 +1494,47 @@ bool StereoFlow::compute_smooth_item(double& sdata, double& sweight, const int& 
     sweight = wsmooth * (1 + alpha * epsilon + beta * epsilon * epsilon);
     return true;
 }
+
+void StereoFlow::check_ordering() {
+//    int idx = -1;
+//    int cnt = 0;
+//    for(int y = 0; y < m_h; ++y) {
+//        for(int x = 0; x < m_w - 1; ++x) {
+//            if(255 != m_mask_l[++idx]) continue;
+//            if(0 == m_disp[idx] || 0 == m_disp[idx+1]) continue;
+//            if(m_disp[idx] > m_disp[idx+1] + 1) {
+//                m_disp[idx + 1] = 0.f;
+//                m_best_k[idx + 1] = 0;
+//                m_best_mcost[idx + 1] = 0.f;
+//                m_best_prior[idx + 1] = 0.f;
+//                cnt++;
+//            }
+//        }
+//    }
+    int idx = -1, cnt = 0;
+    for(int y = 0; y < m_h; ++y) {
+        for(int x = 0; x < m_w - 1; ++x) {
+            if(255 != m_mask_l[++idx]) continue;
+            if(0==m_disp[idx] || 0==m_disp[idx+1]) continue;
+            int rx = x - m_disp[idx];
+            int rx_add = x + 1 - m_disp[idx+1];
+            if( (rx >= rx_add) || (m_disp[idx] > m_disp[idx+1] + 1)) {
+                m_disp[idx+1] = 0.f;
+                m_best_k[idx+1] = 0;
+                m_best_mcost[idx+1] = 0.f;
+                m_best_prior[idx+1] = 0.f;
+                cnt++;
+            }
+        }
+
+    }
+    cout << "\n\tordering check after cross check: eliminate " << cnt << " points." << endl;
+
+    //
+    copy_disp_2_disp_l();
+    copy_disp_2_disp_r();
+}
+
 
 #if 0
 void StereoFlow::scanline_optimize(const int direction) {

@@ -14,6 +14,8 @@ public:
     void save_init_infos(const int level);
     void save_seed_infos(const int level);
     void save_prop_infos(const int level);
+    void save_clean_prop_infos(const int level);
+    void save_order_check_infos(const int level, const string& savename);
     void save_rematch_infos(const int level);
     void save_upsamling_infos(const int level);
     void save_so_infos(const int level);

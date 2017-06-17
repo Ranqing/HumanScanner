@@ -100,7 +100,7 @@ void Debugger::save_init_infos(const int level) {
     string save_fn_r = m_save_dir + "/init_disp_r_" + str + ".jpg";
     string save_fn   = m_save_dir + "/init_disp_" + str + ".jpg";
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
@@ -151,7 +151,7 @@ void Debugger::save_seed_infos(const int level) {
 
     string save_fn = m_save_dir + "/seed_disp_" + int2string(level) + ".jpg";
     save_disp_data(save_fn, disp_seed);
-    cout << "debug:\tsaving " << save_fn << endl;
+    cout << "\ndebug:\tsaving " << save_fn << endl;
 
     save_fn = m_save_dir + "/seeds_" + qing_int_2_string(level) + ".txt";
     fstream fout(save_fn, ios::out);
@@ -176,24 +176,52 @@ void Debugger::save_prop_infos(const int level) {
     string save_fn   = m_save_dir + "/prop_disp_" + str + ".jpg";
 
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
     cout << "debug:\tsaving " << save_fn << endl;
 }
 
+void Debugger::save_clean_prop_infos(const int level) {
+    Mat disp_l, disp_r, disp;
+    get_disp_datas(disp_l, disp_r, disp);
+
+    string str = int2string(level);
+    string save_fn_l = m_save_dir + "/prop_clean_disp_l_" + str + ".jpg";
+    string save_fn_r = m_save_dir + "/prop_clean_disp_r_"  + str + ".jpg";
+    string save_fn   = m_save_dir + "/prop_clean_disp_" + str + ".jpg";
+
+    save_disp_data(save_fn_l, disp_l);
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
+    save_disp_data(save_fn_r, disp_r);
+    cout << "debug:\tsaving " << save_fn_r << endl;
+    save_disp_data(save_fn, disp);
+    cout << "debug:\tsaving " << save_fn << endl;
+}
+
+void Debugger::save_order_check_infos(const int level, const string& savename) {
+    Mat disp_l, disp_r, disp;
+    get_disp_datas(disp_l, disp_r, disp);
+
+    string str = int2string(level);
+    string save_fn   = m_save_dir + "/" + savename;
+    save_disp_data(save_fn, disp);
+    cout << "\ndebug:\tsaving " << save_fn << endl;
+}
+
+
 void Debugger::save_rematch_infos(const int level) {
     Mat disp_l, disp_r, disp;
     get_disp_datas(disp_l, disp_r, disp);
 
     string str = int2string(level);
-    string save_fn_l = m_save_dir + "/fill_disp_l_" + str + ".jpg";           //i.e. rematch
-    string save_fn_r = m_save_dir + "/fill_disp_r_"  + str + ".jpg";
-    string save_fn   = m_save_dir + "/fill_disp_" + str + ".jpg";
+    string save_fn_l = m_save_dir + "/rematch_disp_l_" + str + ".jpg";           //i.e. rematch
+    string save_fn_r = m_save_dir + "/rematch_disp_r_"  + str + ".jpg";
+    string save_fn   = m_save_dir + "/rematch_disp_" + str + ".jpg";
 
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
@@ -210,7 +238,7 @@ void Debugger::save_upsamling_infos(const int level) {
     string save_fn   = m_save_dir + "/upsamling_disp_" + str + ".jpg";
 
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
@@ -227,7 +255,7 @@ void Debugger::save_so_infos(const int level) {
     string save_fn   = m_save_dir + "/so_disp_" + str + ".jpg";
 
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
@@ -244,7 +272,7 @@ void Debugger::save_rv_infos(const int level) {
     string save_fn   = m_save_dir + "/rv_disp_" + str + ".jpg";
 
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
@@ -261,7 +289,7 @@ void Debugger::save_median_infos(const int level) {
     string save_fn   = m_save_dir + "/mf_disp_" + str + ".jpg";
 
     save_disp_data(save_fn_l, disp_l);
-    cout << "debug:\tsaving " << save_fn_l << endl;
+    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);
     cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);
@@ -277,7 +305,7 @@ void Debugger::save_final_infos(const int level) {
     string save_fn_r = m_save_dir + "/final_disp_r_"  + str + ".jpg";
     string save_fn   = m_save_dir + "/final_disp_" + str + ".jpg";
 
-    save_disp_data(save_fn_l, disp_l);    cout << "debug:\tsaving " << save_fn_l << endl;
+    save_disp_data(save_fn_l, disp_l);    cout << "\ndebug:\tsaving " << save_fn_l << endl;
     save_disp_data(save_fn_r, disp_r);    cout << "debug:\tsaving " << save_fn_r << endl;
     save_disp_data(save_fn, disp);    cout << "debug:\tsaving " << save_fn << endl;
 
@@ -327,7 +355,7 @@ void Debugger::save_subpixel_infos(const int level) {
     int h = m_stereo_fl->get_h();
     vector<float>& disp = m_stereo_fl->get_disp();
     save_float_vec_data(save_fn, w, h, disp);
-    cout << "debug:\tsaving " << save_fn << endl;
+    cout << "\ndebug:\tsaving " << save_fn << endl;
 }
 
 //by 2017.05.30
@@ -393,7 +421,7 @@ void Debugger::fast_check_disp_by_depth(const string filename, float * mdisp) {
     qing_disp_2_depth(points, colors, pdsp, pmsk, pclr, qmtx, m_crop_l, m_w, m_h );
 
     qing_write_point_color_ply(m_save_dir + "/" + filename, points, colors);
-    cout << "debug:\tsaving.." << filename << "\t" << points.size() << " points. " << endl;
+    cout << "debug:\tsaving " << filename << "..\t" << points.size() << " points. " << endl;
 }
 
 //check by disparity histogram: draw histogram
@@ -441,9 +469,8 @@ void Debugger::fast_check_by_diff(const string diffname, const int diff_thresh) 
     int idx = 0;
     for(int y = 0; y < m_h; ++y) {
         for(int x = 1; x < m_w; ++x) {
-            idx ++;
-            if(255!=pmsk[idx]) continue;
-            if(abs(disp[idx] - disp[idx-1]) > diff_thresh) {
+            if(255!=pmsk[++idx]) continue;
+            if(disp[idx] && disp[idx-1] && (abs(disp[idx] - disp[idx-1]) > diff_thresh)) {
                 diff[idx] = abs(disp[idx] - disp[idx-1]);
                 maxval = max((int)diff[idx], maxval);
             } //adjacent pixels exceeds 1 disparity
@@ -451,11 +478,11 @@ void Debugger::fast_check_by_diff(const string diffname, const int diff_thresh) 
         }
     }
 
-    cout << "debug: maxval = " << maxval ;
-    mat_diff_disp.convertTo(mat_diff_disp, CV_8UC1, 255/maxval);
-
+    if(0 != maxval) {
+        mat_diff_disp.convertTo(mat_diff_disp, CV_8UC1, 255/maxval);
+    }
     imwrite(m_save_dir + "/" + diffname, mat_diff_disp);
-    cout << "\tsaving " << diffname << endl;
+    cout << "debug:\tsaving " << diffname << "..\tmaxval = " << maxval << endl;
 }
 
 void Debugger::compare_init_final_disp(const int level) {
