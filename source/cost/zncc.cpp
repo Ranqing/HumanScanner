@@ -1,10 +1,12 @@
 #include "zncc.h"
-#include "../../../Qing/qing_image.h"
-#include "../../../Qing/qing_timer.h"
+#include "../../../../Qing/qing_image.h"
+#include "../../../../Qing/qing_timer.h"
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
 using namespace cv;
+
+#define ZNCC_WND 9
 
 void ZNCC::build_cost_vol_l(const vector<float> &img_l, const vector<float> &img_r,
                             const vector<float> &avg_l, const vector<float> &avg_r,
@@ -69,7 +71,7 @@ void ZNCC::build_cost_vol_l(const vector<float> &img_l, const vector<float> &img
 
     QingTimer timer ;
 
-    int offset = m_wnd_sz * 0.5, wndsz2 = m_wnd_sz * m_wnd_sz;
+    int offset = m_wnd_sz * 0.5;
     for(int k = 0; k <= m_range; ++k)
     {
         vector<float>& cost_of_k = cost_vol[k];
@@ -87,7 +89,6 @@ void ZNCC::build_cost_vol_l(const vector<float> &img_l, const vector<float> &img
 
                 double fenzi = 0., fenmu = 0., fenmu1 = 0., fenmu2 = 0.;
 
-                vector<double> delta_lefts(wndsz2,0.), delta_rights(wndsz2, 0.);
                 for(int dy = -offset; dy <= offset; ++dy)
                 {
                     int cury = y + dy;
@@ -111,14 +112,6 @@ void ZNCC::build_cost_vol_l(const vector<float> &img_l, const vector<float> &img
                         fenzi  += delta_l * delta_r;
                         fenmu1 += delta_l * delta_l;
                         fenmu2 += delta_r * delta_r;
-
-# if 0
-                        if(y==6&&k==14) {
-                            int tidx = (dy+offset) * m_wnd_sz + (dx+offset);
-                            delta_lefts[tidx] = delta_l;
-                            delta_rights[tidx] = delta_r;
-                        }
-# endif
                     }
                 }
 
@@ -127,24 +120,9 @@ void ZNCC::build_cost_vol_l(const vector<float> &img_l, const vector<float> &img
                     cost_of_k[cen_idx_l] = fenzi / fenmu ;
                 else
                     cost_of_k[cen_idx_l] = 1.f;  //max-value
-
-# if 0
-                if(y==6&&k==14&&x>120&&x<140) {
-                    cout << x << ": " << endl;
-                    for(int m = 0; m < wndsz2; ++m) {
-                        cout << delta_lefts[m] << ' ';
-                    }
-                    cout << endl;
-                    for(int m = 0; m < wndsz2; ++m) {
-                        cout << delta_rights[m] << ' ';
-                    }
-                    cout << endl;
-                    cout << cost_of_k[cen_idx_l] << endl << endl;
-
-                }
-# endif
             }
         }
+
     }
     cout << "\tzncc left cost volume calculation done..." << timer.duration() << "s\n" ;
 }

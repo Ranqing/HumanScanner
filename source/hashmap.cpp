@@ -17,7 +17,8 @@ void MatchHash::init(const int cap_keys, const int cap_values) {
         cerr << "failed to initial match hash map... " << endl;
         exit(-1);
     }
- }
+    cout << "\tmatch hash map initialization done..." << m_num_keys << " keys, " << m_num_values << " values. " << endl;
+}
 
 bool MatchHash::is_exist(const Point2f &key, const MatchValue &value) {
     if(get_init(key)) {
@@ -184,76 +185,17 @@ void MatchHash::parse() {
     }
 }
 
-//bool MatchHash::db_parse(vector<float>& disp, Mat &disp_3, float scale) {
-//    int h = disp_3.size().height;
-//    int w = disp_3.size().width;
-//    int sx, sy, idx ;
-//    float d;
-//    bool ischanged = false;
-//
-//    unsigned char * ptr_disp_3 = (unsigned char *)disp_3.ptr<unsigned char>(0);
-//
-//    for(int i = 0, sz = m_num_keys; i < sz; ++i) {
-//        Point2f t_key = m_keys[i];
-//        sx = t_key.x;
-//        sy = t_key.y;
-//        idx = sy * w + sx;
-//
-//        MatchValue t_value;
-//        if(get_init(t_key)) {
-//            while(get_next(t_value)) {
-//              //  cout << t_key << ", " << t_value ;
-//                d = t_value.m_d;
-//
-//                if(d!=disp[idx]) {
-//                    ischanged = true;
-//                    disp[idx] = d;
-//                    ptr_disp_3[3*idx+0] = disp[idx] * scale;
-//                    ptr_disp_3[3*idx+2] = ptr_disp_3[3*idx+1] = ptr_disp_3[3*idx+0];
-//                }
-//
-//            }
-//        }
-//    }
-//    return ischanged;
-//}
 
-//db_parse(disp_vec, prior_vec, db_disp_3, db_prior_3, m_scale)
 
-bool MatchHash::db_parse(vector<float>& disp, vector<float>& prior, int w, int h, int len) {
 
-    int sx, sy, idx ;
-    float d, p;
-    bool ischanged = false;
 
-    for(int i = 0, sz = m_num_keys; i < sz; ++i) {
-        Point2f t_key = m_keys[i];
-        sx = t_key.x;
-        sy = t_key.y;
-        idx = sy * w + sx;
-        if(idx >= len) {
-            cerr << "out of range in db_parse.." << endl;
-            exit(1);
-        }
 
-        MatchValue t_value;
-        if(get_init(t_key)) {
-            while(get_next(t_value)) {
-                d = t_value.m_d;
-                p = t_value.m_prior;
 
-                if(d!=disp[idx]) {
-                    ischanged = true;
-                    disp[idx] = d;
-                    prior[idx] = p;
-                }
 
-            }
-        }
-    }
-    return ischanged;
 
-}
+
+
+
 
 
 

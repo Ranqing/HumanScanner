@@ -16,13 +16,10 @@ public:
     bool init();                                //initialization
     void load_and_crop_images();
     void build_stereo_pyramid();
-    void build_stereo_costvol();
-
     void match();                               //stereo matching
     void copy_disp_from_stereo();
     void disp_2_depth(const Mat& dsp, const Mat& msk, const Mat& img, vector<Vec3f>& points, vector<Vec3f>& colors);
     void triangulate();                         //disparity to depth then to 3D points
-
 
 private:
     string m_img_folder;                        //image folder
@@ -42,7 +39,7 @@ private:
     string m_out_dir;                           //out directory
 
     Point2i m_crop_pointL, m_crop_pointR;       //crop points
-    Mat m_imgL, m_imgR;                         //rgb   0 ~ 255
+    Mat m_imgL, m_imgR;                         //rgb   0 ~ 1
     Mat m_mskL, m_mskR;                         //uchar 0 ~ 255
     Mat m_dispL, m_dispR, m_disp;               //disparity result
     Size m_size;                                //image size

@@ -38,7 +38,6 @@ public:
     int get_num_of_values() { return m_num_values;}
 
     void parse() ;
-    bool db_parse(vector<float>& disp, vector<float>& prior, int w, int h, int len);
 
 private:
     vector<Point2f> m_keys;       //keys

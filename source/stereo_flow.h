@@ -11,8 +11,8 @@
 
 class MatchHash;
 
-const float c_thresh_zncc  = 0.85;	//0.85,1.15
-const float c_thresh_prior = 1.20;
+const float c_thresh_zncc  = 0.95;	//0.85,1.15
+const float c_thresh_prior = 1.35;
 const float c_thresh_e_zncc  = 0.5;
 const float c_thresh_e_prior = 1.02;
 
@@ -35,30 +35,6 @@ public:
     void min_takes_all(const vector<uchar>& mask, const vector<vector<float> >& cost_vol,
                        vector<float>& disp, vector<int>& bestk, vector<float>& mcost, vector<float>& prior);
 
-    //2017.05.31
-    void matching_cost();
-    void beeler_disp_refinement();
-
-    void removal_isolated_propagation();
-    void check_ordering();
-
-private:
-    vector<vector<vector<float> > > m_hwd_costvol_l, m_hwd_costvol_r;
-    vector<vector<vector<float> > > m_ncc_vecs_l, m_ncc_vecs_r;                                   //each pixel's ncc vector
-    vector<float> m_seed_prior;                                                                   //priority of seed matches
-
-    int removal_isolated_seeds(const int& rsize, const int& thresh);
-    int removal_boundary_seeds(const int& rsize);
-
-    int removal_isolated_disparities(vector<float>& disp, vector<int>& bestk, vector<float>& mcost, vector<float>& prior, const vector<uchar>& mask, const int& rsize, const int& thresh);
-
-    void matching_cost_from_zncc();
-    double compute_data_item(double& ddata, double& dweight, const int& y, const int& x, const float& tstep);
-    bool compute_smooth_item(double& sdata, double& sweight, const int& y, const int& x,  const double& epsilon);
-
-
-    //end of 2017.05.31
-
 private:
     vector<float> m_view_l, m_gray_l, m_mean_l, m_view_r, m_gray_r, m_mean_r;            //image datas
     vector<uchar> m_mask_l, m_mask_r;                                                    //mask datas
@@ -68,10 +44,8 @@ private:
     vector<int> m_best_k, m_best_k_l, m_best_k_r;                                        //best disp discrete level
     vector<uchar> m_outliers_l, m_outliers_r;
 
-    Mat m_mat_view_l, m_mat_view_r;          //rgb unsgined char [0,255]
-    Mat m_mat_gray_l, m_mat_gray_r;          //grayscale unsigned char [0,255]
-    Mat m_mat_mean_l, m_mat_mean_r;          //grayscale unsigned char [0,255]
-    Mat m_mat_mask_l, m_mat_mask_r;          //grayscale unsigned char [0,255]
+    Mat m_rgb_view_l, m_rgb_view_r;          //bgr uchar image
+    Mat m_mat_mask_l, m_mat_mask_r;
 
 #if 1
     //blur size == DEFAULT_NCC_WND
@@ -139,14 +113,11 @@ public:
 
     void median_filter();
     void subpixel_enhancement();
+
     void cross_validation();
 
-public:
     void set_wnd_size(const int wnd_sz) { m_wnd_size = wnd_sz; }
     int  get_wnd_size() { return m_wnd_size; }
-
-    vector<float>& get_mean_l()     { return m_mean_l; }
-    vector<float>& get_mean_r()     { return m_mean_r; }
 
     vector<float>& get_disp_l()     { return m_disp_l; }
     vector<float>& get_disp_r()     { return m_disp_r; }
@@ -160,12 +131,6 @@ public:
 
     Mat get_mat_mask_l()  { return m_mat_mask_l; }
     Mat get_mat_mask_r()  { return m_mat_mask_r; }
-    Mat get_mat_mean_l()  { return m_mat_mean_l; }
-    Mat get_mat_mean_r()  { return m_mat_mean_r; }
-    Mat get_mat_view_l()  { return m_mat_view_l; }
-    Mat get_mat_view_r()  { return m_mat_view_r; }
-    Mat get_mat_gray_l() { return m_mat_gray_l; }
-    Mat get_mat_gray_r() { return m_mat_gray_r; }
 
     vector<int>& get_bestk_l() { return m_best_k_l; }
     vector<int>& get_bestk_r() { return m_best_k_r; }
@@ -175,54 +140,51 @@ public:
     vector<float>& get_best_prior_r() { return m_best_prior_r; }
     vector<float>& get_mcost_l(const int k) { return m_cost_vol_l[k];}
     vector<float>& get_mcost_r(const int k) { return m_cost_vol_r[k];}
-
 };
 
 inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL, const Mat &mskR, const float &max_disp, const float &min_disp, const float scale):
     m_max_disp(max_disp), m_min_disp(min_disp), m_scale(scale) {
 
-    //bgr view : uchar [0,255]
-
-    cvtColor(imgL, m_mat_view_l, CV_BGR2RGB);
-    cvtColor(imgR, m_mat_view_r, CV_BGR2RGB);
-    //gray view: uchar [0,255]
-    cvtColor(m_mat_view_l, m_mat_gray_l, CV_RGB2GRAY);
-    cvtColor(m_mat_view_r, m_mat_gray_r, CV_RGB2GRAY);
-    //mask: uchar [0,255]
-    m_mat_mask_l = mskL.clone();
-    m_mat_mask_r = mskR.clone();
+    Mat grayL, grayR;
+    cvtColor(imgL, grayL, CV_RGB2GRAY);
+    cvtColor(imgR, grayR, CV_RGB2GRAY);
 
     m_w = imgL.size().width;
     m_h = imgL.size().height;
     m_total = m_w * m_h;
     m_disp_ranges = (m_max_disp - m_min_disp) / DISP_STEP;
 
-    Mat viewL, viewR, grayL, grayR;
-    m_mat_view_l.convertTo(viewL, CV_32FC3, 1.0f);
-    m_mat_view_r.convertTo(viewR, CV_32FC3, 1.0f);
-    cvtColor(viewL, grayL, CV_RGB2GRAY);
-    cvtColor(viewR, grayR, CV_RGB2GRAY);
+    //rgb
+    m_view_l.resize(m_total * 3);
+    m_view_r.resize(m_total * 3);
+    memcpy(&m_view_l.front(), imgL.data, sizeof(float)*m_total*3);
+    memcpy(&m_view_r.front(), imgR.data, sizeof(float)*m_total*3);
 
-    //rgb float [0,255]
-    m_view_l.resize(m_total * 3); memcpy(&m_view_l.front(), viewL.data, sizeof(float)*m_total*3);
-    m_view_r.resize(m_total * 3); memcpy(&m_view_r.front(), viewR.data, sizeof(float)*m_total*3);
-    //gray float [0,255]
-    m_gray_l.resize(m_total); memcpy(&m_gray_l.front(), grayL.data, sizeof(float)*m_total);
-    m_gray_r.resize(m_total); memcpy(&m_gray_r.front(), grayR.data, sizeof(float)*m_total);
-    //mask uchar [0,255]
-    m_mask_l.resize(m_total); memcpy(&m_mask_l.front(), mskL.data, sizeof(uchar)*m_total);
-    m_mask_r.resize(m_total); memcpy(&m_mask_r.front(), mskR.data, sizeof(uchar)*m_total);
+    //rgb uchar image
+    imgL.convertTo(m_rgb_view_l, CV_8UC3, 255);
+    imgR.convertTo(m_rgb_view_r, CV_8UC3, 255);
 
+    //mask
+    m_mat_mask_l = mskL.clone();
+    m_mat_mask_r = mskR.clone();
+
+    //gray
+    m_gray_l.resize(m_total);
+    m_gray_r.resize(m_total);
+    memcpy(&m_gray_l.front(), grayL.data, sizeof(float)*m_total);
+    memcpy(&m_gray_r.front(), grayR.data, sizeof(float)*m_total);
+
+    //mask
+    m_mask_l.resize(m_total);
+    m_mask_r.resize(m_total);
+    memcpy(&m_mask_l.front(), mskL.data, sizeof(uchar)*m_total);
+    memcpy(&m_mask_r.front(), mskR.data, sizeof(uchar)*m_total);
     m_valid_pixels_l = countNonZero(mskL);
     m_valid_pixels_r = countNonZero(mskR);
 
-    //disparity
     m_disp_l.resize(m_total); m_disp_r.resize(m_total); m_disp.resize(m_total); m_seed_disp.resize(m_total);
-    //matching cost
     m_best_mcost_l.resize(m_total); m_best_mcost_r.resize(m_total); m_best_mcost.resize(m_total);
-    //priority
     m_best_prior_l.resize(m_total); m_best_prior_r.resize(m_total); m_best_prior.resize(m_total);
-    //discrete disparity
     m_best_k_l.resize(m_total); m_best_k_r.resize(m_total), m_best_k.resize(m_total);
 
     m_support_region = new CrossShapedRegion();
@@ -231,40 +193,26 @@ inline StereoFlow::StereoFlow(const Mat &imgL, const Mat &imgR, const Mat &mskL,
     m_aggr_mtd = NULL;
 
 #if 0
-    cout << m_w << '\t' << m_h << endl;
     Mat test_view = Mat::zeros(m_h, m_w, CV_32FC3);
     Mat test_gray = Mat::zeros(m_h, m_w, CV_32FC1);
     Mat test_mask = Mat::zeros(m_h, m_w, CV_8UC1);
-    Mat uchar_test_view,uchar_test_gray;
 
     qing_vec_2_img<float>(m_view_l, test_view);
     qing_vec_2_img<float>(m_gray_l, test_gray);
     qing_vec_2_img<uchar>(m_mask_l, test_mask);
 
+    Mat uchar_test_view;
     cvtColor(test_view, test_view, CV_RGB2BGR);
-    test_view.convertTo(uchar_test_view, CV_8UC3, 1);
-    test_gray.convertTo(uchar_test_gray, CV_8UC1, 1);
+    test_view.convertTo(uchar_test_view, CV_8UC3, 255);
+    Mat uchar_test_gray;
+    test_gray.convertTo(uchar_test_gray, CV_8UC1, 255);
 
-    imshow("test_view_l", uchar_test_view);
-    imshow("test_gray_l", uchar_test_gray);
-    imshow("test_mask_l", test_mask);
-
-    qing_vec_2_img<float>(m_view_r, test_view);
-    qing_vec_2_img<float>(m_gray_r, test_gray);
-    qing_vec_2_img<uchar>(m_mask_r, test_mask);
-
-    cvtColor(test_view, test_view, CV_RGB2BGR);
-    test_view.convertTo(uchar_test_view, CV_8UC3, 1);
-    test_gray.convertTo(uchar_test_gray, CV_8UC1, 1);
-
-    imshow("test_view_r", uchar_test_view);
-    imshow("test_gray_r", uchar_test_gray);
-    imshow("test_mask_r", test_mask);
-
+    imshow("test_view", uchar_test_view);
+    imshow("test_gray", uchar_test_gray);
+    imshow("test_mask", test_mask);
     waitKey(0);
     destroyAllWindows();
 #endif
-
 }
 
 inline StereoFlow::StereoFlow() {

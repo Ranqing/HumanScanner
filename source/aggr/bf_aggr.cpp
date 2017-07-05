@@ -1,7 +1,7 @@
 #include "bf_aggr.h"
 
-#include "../../../Qing/qing_bilateral_filter.h"
-#include "../../../Qing/qing_timer.h"
+#include "../../../../Qing/qing_bilateral_filter.h"
+#include "../../../../Qing/qing_timer.h"
 
 void BFCA::aggr_cost_vol(const vector<float> &img, const vector<uchar> &msk, vector<vector<float> > &cost_vol) {
 

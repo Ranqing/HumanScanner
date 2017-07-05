@@ -1,9 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include "../../Qing/qing_string.h"
-#include "../../Qing/qing_dir.h"
-#include "../../Qing/qing_image.h"
+#include "../../../Qing/qing_string.h"
+#include "../../../Qing/qing_dir.h"
+#include "../../../Qing/qing_image.h"
 
 #define DEBUG 1
 #define MIN_IMG_SIZE 160        //图像金字塔分辨率最小值

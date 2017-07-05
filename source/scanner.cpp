@@ -2,7 +2,8 @@
 #include "stereo_flow.h"
 #include "debug.h"
 
-#include "../../Qing/qing_ply.h"
+#include "../../../Qing/qing_image.h"
+#include "../../../Qing/qing_ply.h"
 
 bool HumanBodyScanner::init()
 {
@@ -71,7 +72,6 @@ bool HumanBodyScanner::init()
 
     load_and_crop_images();
     cout << "scanner initialization done..." << endl;
-    return true;
 }
 
 void HumanBodyScanner::load_and_crop_images()
@@ -108,7 +108,7 @@ void HumanBodyScanner::load_and_crop_images()
         m_mskR = full_mskR(Rect(m_crop_pointR, m_size)).clone();
     }
 
-    //crop images. saving pixels with masks
+    //crop images
     full_imgL(Rect(m_crop_pointL, m_size)).copyTo(m_imgL, m_mskL);
     full_imgR(Rect(m_crop_pointR, m_size)).copyTo(m_imgR, m_mskR);
 
@@ -118,6 +118,12 @@ void HumanBodyScanner::load_and_crop_images()
     imwrite(m_out_dir + "/crop_mskL.jpg", m_mskL);
     imwrite(m_out_dir + "/crop_mskR.jpg", m_mskR);
 #endif
+
+    //normalize image format and values
+    cvtColor(m_imgL, m_imgL, CV_BGR2RGB);
+    cvtColor(m_imgR, m_imgR, CV_BGR2RGB);
+    m_imgL.convertTo(m_imgL, CV_32F, 1/255.0f);
+    m_imgR.convertTo(m_imgR, CV_32F, 1/255.0f);
 }
 
 void HumanBodyScanner::build_stereo_pyramid()
@@ -134,34 +140,22 @@ void HumanBodyScanner::build_stereo_pyramid()
 
     int t_max_disp = m_max_disp;
     int t_min_disp = m_min_disp;
-    int t_wnd_sz;
     float t_disp_scale = (m_max_disp <= 255) ? (255/m_max_disp) : min((255.f/m_max_disp), 0.5f);
 
     for(int p = 0; p < m_max_levels; ++p) {
         int w = t_imgL.size().width;
         int h = t_imgR.size().height;
 
-        if(max(w,h) > 1000) t_wnd_sz = QING_WND_SIZE + 4;
-        else t_wnd_sz = QING_WND_SIZE;
-
         if( w < MIN_IMG_SIZE || h < MIN_IMG_SIZE || t_max_disp < MIN_DISP_VALUE) {
             m_max_levels = p;
             break;
         }
 
-        cout << "\n\tPyramid " << p << ": "<< t_min_disp << " ~ " << t_max_disp << ", scale = " << t_disp_scale << ", wnd = " << t_wnd_sz << '\t';
+        cout << "\n\tPyramid " << p << ": "<< t_min_disp << " ~ " << t_max_disp << ", scale = " << t_disp_scale << '\t';
         cout << "initialization of stereo flow..." << endl;
-        if(0>p) {
-            cout << "\tdon't consider the original image." << endl;
-            m_stereo_pyramid[p] = NULL;
-        }
-        else{
-            m_stereo_pyramid[p] = new StereoFlow(t_imgL, t_imgR, t_mskL, t_mskR, t_max_disp, t_min_disp, t_disp_scale);
-            m_stereo_pyramid[p]->set_wnd_size(t_wnd_sz);
-            m_stereo_pyramid[p]->calc_mean_images();
-        }
+        m_stereo_pyramid[p] = new StereoFlow(t_imgL, t_imgR, t_mskL, t_mskR, t_max_disp, t_min_disp, t_disp_scale);
 
-        //down-sample
+        //downsample
         t_max_disp = t_max_disp * 0.5;
         t_min_disp = t_min_disp * 0.5;
         t_disp_scale = min(t_disp_scale * 2, 1.f);
@@ -169,50 +163,45 @@ void HumanBodyScanner::build_stereo_pyramid()
 #if DEBUG
         if(p) {
             string savefn;
-            string lvlstr = int2string(p);
 
-            savefn = m_out_dir + "/crop_imgL_" + lvlstr + ".jpg";            imwrite(savefn, t_imgL);
-            savefn = m_out_dir + "/crop_imgR_" + lvlstr + ".jpg";            imwrite(savefn, t_imgR);
-            savefn = m_out_dir + "/crop_mskL_" + lvlstr + ".jpg";            qing_save_image(savefn, t_mskL);
-            savefn = m_out_dir + "/crop_mskR_" + lvlstr + ".jpg";            qing_save_image(savefn, t_mskR);
-            savefn = m_out_dir + "/mean_imgL_" + lvlstr + ".jpg";            qing_save_image(savefn, m_stereo_pyramid[p]->get_mat_mean_l(), 255);
-            savefn = m_out_dir + "/mean_imgR_" + lvlstr + ".jpg";            qing_save_image(savefn, m_stereo_pyramid[p]->get_mat_mean_r(), 255);
+            savefn = m_out_dir + "/crop_imgL_" + int2string(p) + ".jpg";
+            qing_save_image(savefn, t_imgL, 255);
+            savefn = m_out_dir + "/crop_imgR_" + int2string(p) + ".jpg";
+            qing_save_image(savefn, t_imgR, 255);
+            savefn = m_out_dir + "/crop_mskL_" + int2string(p) + ".jpg";
+            qing_save_image(savefn, t_mskL);
+            savefn = m_out_dir + "/crop_mskR_" + int2string(p) + ".jpg";
+            qing_save_image(savefn, t_mskR);
         }
 #endif
         //guassian filter then choose half cols
         pyrDown(t_imgL, t_imgL);
         pyrDown(t_imgR, t_imgR);
-        pyrDown(t_mskL, t_mskL);        qing_threshold_msk(t_mskL, t_mskL, 128, 255);
-        pyrDown(t_mskR, t_mskR);        qing_threshold_msk(t_mskR, t_mskR, 128, 255);
+        pyrDown(t_mskL, t_mskL);
+        // threshold(t_mskL, t_mskL, 128, 255, THRESH_BINARY);
+        qing_threshold_msk(t_mskL, t_mskL, 128, 255);
+        pyrDown(t_mskR, t_mskR);
+        // threshold(t_mskR, t_mskR, 128, 255, THRESH_BINARY);
+        qing_threshold_msk(t_mskR, t_mskR, 128, 255);
     }
 
     cout << "\nstereo pyramid building done. max levels = " << m_max_levels << endl;
 }
 
-void HumanBodyScanner::build_stereo_costvol() {
-
-    cout << "\ncost volume pyramid building start." << endl;
-    double duration ;
-    for(int p = m_max_levels - 1; p >= 1; --p) {
-        duration = getTickCount();
-        printf("\tlevel = %d\t", p);
-        m_stereo_pyramid[p]->matching_cost();
-        printf( "\tmatching cost volume computation: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );   // the elapsed time in sec
-    }
-    cout << "\ncost volume pyramid building finished." << endl;
-    exit(1);
-
-}
-
 void HumanBodyScanner::match()
 {
-    build_stereo_pyramid();    //build image pyramid
- //   build_stereo_costvol();    //compute hirerchical matching cost volume
+    build_stereo_pyramid();
 
-    for(int p = m_max_levels - 1; p >= 0; --p) {
-        m_stereo_pyramid[p]->set_patch_params(QING_WND_SIZE);
+    for(int p = m_max_levels - 1, cnt = 2; p >= 0; --p, ++cnt) {
+        //support window size: 5 -> 7 -> 9 -> 11
+        int wnd_sz = 2 * cnt + 1;
+
+        m_stereo_pyramid[p]->set_wnd_size(wnd_sz);
+        m_stereo_pyramid[p]->calc_mean_images();
+        m_stereo_pyramid[p]->set_patch_params(wnd_sz + 2);
         m_stereo_pyramid[p]->calc_support_region();
-        //m_stereo_pyramid[p]->set_voting_params(wnd_sz); //can be replaced by median filtering
+        //m_stereo_pyramid[p]->set_voting_params(wnd_sz);
+
 
         double duration = (double)getTickCount();
         if(m_max_levels - 1 == p)
@@ -226,12 +215,6 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->set_data_source(m_stereo_pyramid[p]);                      //set data source
-        m_debugger->set_triangulate_info((1.0f/(1<<p)), m_crop_pointL, m_crop_pointR, m_qmatrix);
-        m_debugger->fast_check_disp_by_depth("qing_check_init_depth_" + qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
-        m_debugger->fast_check_disp_by_depth("qing_check_seed_depth_" + qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp_seed()).front());
-        //  m_debugger->fast_check_by_histogram("qing_check_hist_" + qing_int_2_string(p) + ".jpg");
-        //  m_debugger->fast_check_sgbm("qing_check_sgbm_" + qing_int_2_string(p));
-        m_debugger->fast_check_by_diff("diff_init_" + qing_int_2_string(p) + ".jpg");
         m_debugger->save_init_infos(p);                                        //save initial disparity
         m_debugger->save_seed_infos(p);                                        //save disparity seeds
 #endif
@@ -245,32 +228,15 @@ void HumanBodyScanner::match()
         m_stereo_pyramid[p]->seed_propagate(0);                                    //left->right propagation
         m_stereo_pyramid[p]->seed_propagate(1);                                    //right->left propatation
         m_stereo_pyramid[p]->matches_2_disp();                                     //matches to disparity
-        m_stereo_pyramid[p]->removal_isolated_propagation();
         m_stereo_pyramid[p]->cross_validation();                                   //crosss check
-#if DEBUG
-        m_debugger->save_clean_prop_infos(p);                                                   //save propagate disparitys
-        m_debugger->fast_check_disp_by_depth("qing_check_clean_prop_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
-        m_debugger->fast_check_by_diff("diff_prop_clean_" + qing_int_2_string(p) + ".jpg");
-#endif
-
-        m_stereo_pyramid[p]->check_ordering();
-#if DEBUG
-        m_debugger->save_order_check_infos(p, "prop_order_check_" + qing_int_2_string(p) + ".jpg");
-        m_debugger->fast_check_by_diff("diff_prop_order_check_" + qing_int_2_string(p) + ".jpg");
-#endif
-
-//#if DEBUG
-//        m_debugger->save_prop_infos(p);                                                   //save propagate disparitys
-//        m_debugger->fast_check_disp_by_depth("qing_check_prop_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
-//        m_debugger->fast_check_by_diff("diff_prop_" + qing_int_2_string(p) + ".jpg");
-//#endif
-
         printf( "\n\t--------------------------------------------------------\n" );
         printf( "\texpansion: %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency() );
         printf( "\t--------------------------------------------------------\n" );
+#if DEBUG
+        m_debugger->save_prop_infos(p);                                                   //save propagate disparitys
+#endif
 
-
-#if 0
+#if 1
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                           re-match unexpanded pixels                                               */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -285,13 +251,6 @@ void HumanBodyScanner::match()
         printf( "\t--------------------------------------------------------\n" );
 #if DEBUG
         m_debugger->save_rematch_infos(p);
-        m_debugger->fast_check_disp_by_depth("qing_check_rematch_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
-        m_debugger->fast_check_by_diff("diff_rematch_" + qing_int_2_string(p) + ".jpg");
-#endif
-        m_stereo_pyramid[p]->check_ordering();
-#if DEBUG
-        m_debugger->save_order_check_infos(p, "rematch_order_check_" + qing_int_2_string(p) + ".jpg");
-        m_debugger->fast_check_by_diff("diff_rematch_order_check_" + qing_int_2_string(p) + ".jpg");
 #endif
 #endif
 
@@ -370,27 +329,20 @@ void HumanBodyScanner::match()
         printf( "\tend of stereo matching in level %d\n", p);
         printf( "\t--------------------------------------------------------\n\n" );
 
-#if DEBUG
-         m_debugger->compare_init_final_disp(p);
-         m_debugger->fast_check_by_diff("diff_final_" + qing_int_2_string(p) + ".jpg", 1);
-#endif
-
+#if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                             subpixel: interplotaion                                                */
         /*--------------------------------------------------------------------------------------------------------------------*/
         duration = (double)getTickCount();
-        m_stereo_pyramid[p]->subpixel_enhancement();  //TO-DO
+        m_stereo_pyramid[p]->subpixel_enhancement();
         printf( "\n\t--------------------------------------------------------\n" );
         printf( "\trefined by subpixel interpolation. %.2lf s\n", ((double)(getTickCount())-duration)/getTickFrequency());
         printf( "\t--------------------------------------------------------\n" );
 #ifdef  DEBUG
         m_debugger->save_subpixel_infos(p);
-        m_debugger->fast_check_disp_by_depth("qing_check_subpixel_depth_"+ qing_int_2_string(p) + ".ply", &(m_stereo_pyramid[p]->get_disp()).front());
 #endif
-
+#endif
     }
-
-    exit(1);
 
     //copy disparity results from stereo pyramid
     copy_disp_from_stereo();
@@ -500,13 +452,13 @@ void HumanBodyScanner::triangulate() {
     }
 
     //preparing color
-    //   Mat color_img = m_imgL.clone();
-    //   m_imgL.convertTo(color_img, CV_8UC3, 255.0);
+    Mat color_img;
+    m_imgL.convertTo(color_img, CV_8UC3, 255.0);
 
     vector<Vec3f> points(0);
     vector<Vec3f> colors(0);
 
-    disp_2_depth(m_disp, erode_msk, m_imgL, points, colors);
+    disp_2_depth(m_disp, erode_msk, color_img, points, colors);
     string savefn = m_out_dir + "/" + m_frame_name + "_pointcloud_" + m_stereo_name + ".ply";
     qing_write_point_color_ply(savefn, points, colors);
     cout << "\nsave " << savefn << " done. " << points.size() << " Points." << endl;

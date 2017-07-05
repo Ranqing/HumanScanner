@@ -1,5 +1,5 @@
 #include "cross_shaped_region.h"
-#include "../../Qing/qing_image.h"
+#include "../../../Qing/qing_image.h"
 
 void CrossShapedRegion::set_patch_params(const int sz) {
     m_dis2 = sz;
