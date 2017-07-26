@@ -69,6 +69,7 @@ bool MatchHash::get_worst_value(const Point2f &key, MatchValue &worst_value) {
             }
         }
     }
+	return true;
 }
 
 bool MatchHash::get_value(const Point2f &key, MatchValue &value) {
@@ -94,9 +95,11 @@ int MatchHash::store(const Point2f &key, const MatchValue &value) {
     return m_hashmap->store(key, value);
 }
 
-int MatchHash::erase(const Point2f &key, const MatchValue &value) {
+int MatchHash::erase(const Point2f &key, const MatchValue &value) 
+{
     int count = m_hashmap->count(key);
-    if(0==count) {
+    if(0==count) 
+	{
         cerr << "no such pair in match hash map while erase()..." << endl;
         exit(-1);
     }
@@ -107,12 +110,12 @@ int MatchHash::erase(const Point2f &key, const MatchValue &value) {
             if(m_keys[i] == key) {
                 m_keys[i] = m_keys[m_num_keys - 1];
                 m_keys[m_num_keys - 1] = m_keys[m_num_keys];
-                m_num_keys --;
+                m_num_keys = m_num_keys - 1;
                 break;
             }
         }
     }
-    m_num_values --;
+    m_num_values = m_num_values - 1;
     return m_hashmap->erase(key, value);
 }
 

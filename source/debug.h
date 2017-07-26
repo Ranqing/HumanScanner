@@ -1,7 +1,7 @@
 #ifndef DEBUGGER_H
 #define DEBUGGER_H
 
-#include "../../../Qing/qing_common.h"
+#include "../../Qing/qing_common.h"
 
 class StereoFlow;
 

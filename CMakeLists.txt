@@ -4,7 +4,7 @@ set (PROJECT_NAME HumanBodyScanner)
 project( ${PROJECT_NAME} )
 
 option(WITH_OPENCV "" ON)
-option(WITH_PCL "" ON)
+option(WITH_PCL "" OFF)
 
 macro(use_cxx11)
   if (CMAKE_VERSION VERSION_LESS "3.1")

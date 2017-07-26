@@ -2,8 +2,9 @@
 #include "stereo_flow.h"
 #include "debug.h"
 
-#include "../../../Qing/qing_image.h"
-#include "../../../Qing/qing_ply.h"
+#include "../../Qing/qing_image.h"
+#include "../../Qing/qing_ply.h"
+#include "../../Qing/qing_file_reader.h"
 
 bool HumanBodyScanner::init()
 {
@@ -288,6 +289,7 @@ void HumanBodyScanner::match()
 # endif
 # endif
 
+#if 1
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                         disparity refinement : region voting                                       */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -306,7 +308,9 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_rv_infos(p);                                      //save region voting infos
 #endif
+#endif
 
+#if 0
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                         disparity refinement : median filter                                       */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -321,6 +325,8 @@ void HumanBodyScanner::match()
 #if DEBUG
         m_debugger->save_median_infos(p);
 #endif
+#endif
+
         /*--------------------------------------------------------------------------------------------------------------------*/
         /*                                             save results                                                           */
         /*--------------------------------------------------------------------------------------------------------------------*/
@@ -463,3 +469,115 @@ void HumanBodyScanner::triangulate() {
     qing_write_point_color_ply(savefn, points, colors);
     cout << "\nsave " << savefn << " done. " << points.size() << " Points." << endl;
 }
+
+//2017.07.15
+
+void disp_2_depth_range_grid(const Mat& disp, const Point2f& stPt, const Mat& im, const Mat& mask, const Mat& Qmtx, vector<Point3f>& points, vector<Vec3b>& colors, vector<Point3f>& normals) {
+
+    int h  = disp.size().height;
+    int w  = disp.size().width;
+
+    for(int y = 0; y < h; ++y)
+    {
+        uchar * pmsk = (uchar *)mask.ptr<uchar>(y);
+        float * pdsp = (float *)disp.ptr<float>(y);
+        for(int x = 0; x < w; ++x)
+        {
+            if(pmsk[x] == 0 || pdsp[x] == 0)
+            {
+                points.push_back(Point3f(PT_UNDEFINED, PT_UNDEFINED, PT_UNDEFINED));
+                colors.push_back(Vec3b(0,0,0));
+                normals.push_back(Vec3f(0,0,0));
+            }
+            else
+            {
+                Mat tvec(4,1,CV_64FC1);
+                tvec.at<double>(0,0) = stPt.x + x;
+                tvec.at<double>(1,0) = stPt.y + y;
+                tvec.at<double>(2,0) = pdsp[x];
+                tvec.at<double>(3,0) = 1.0f;
+
+                //cout << "Qmtx: " << Qmtx << endl;
+                //cout << "tvec: " << tvec << endl;
+                Mat hicoord = Qmtx * tvec;
+                //cout << "hicoord: " << hicoord << endl;
+
+                Point3f tpt;
+                tpt.x = hicoord.at<double>(0,0) / hicoord.at<double>(3,0);
+                tpt.y = hicoord.at<double>(1,0) / hicoord.at<double>(3,0);
+                tpt.z = hicoord.at<double>(2,0) / hicoord.at<double>(3,0);
+
+                Point3f tn = Point3f(0.f,0.f,0.f) - tpt;
+
+                points.push_back(tpt);
+                normals.push_back(Vec3f(tn.x, tn.y, tn.z));
+                colors.push_back(im.at<Vec3b>(y,x));
+            }
+        }
+    }
+}
+
+
+
+void HumanBodyScanner::triangulate_range_grid() {
+    cout << "\n triangulate 3d points from disparity results..." << endl;
+
+//    vector<float> disp_l(0), disp_r(0);
+//    qing_read_disp_txt(m_out_dir + "/final_disp_l_0.txt", m_size.height, m_size.width, disp_l );
+//    qing_read_disp_txt(m_out_dir + "/final_disp_r_0.txt", m_size.height, m_size.width, disp_r );
+//    m_dispL = Mat::zeros(m_size, CV_32FC1);
+//    m_dispR = Mat::zeros(m_size, CV_32FC1);
+//    qing_vec_2_img<float>(disp_l, m_dispL);
+//    qing_vec_2_img<float>(disp_r, m_dispR);
+
+    int w = m_size.width;
+    int h = m_size.height;
+    Mat erode_msk  = qing_erode_image(m_mskL, 20);
+
+    float * ptr_disp = (float *)m_disp.ptr<float>(0);
+    uchar * ptr_msk  = (uchar *)erode_msk.ptr<uchar>(0);
+
+    //preparing disparity
+    float offset = m_crop_pointL.x - m_crop_pointR.x;
+    int validnum = 0;
+    for(int y = 0, index = 0; y < h; ++y) {
+        for(int x = 0; x < w; ++x) {
+            if( 255 == ptr_msk[index] && 0 != (int)ptr_disp[index] )  {
+                ptr_disp[index] += offset;
+                ++validnum;
+            }
+            else  ptr_disp[index] = 0.f;
+            index ++;
+        }
+    }
+
+    Mat rgb;
+    vector<Point3f> points(0), normals(0);
+    vector<Vec3b> colors(0);
+
+    validnum = 0;
+    m_imgL.convertTo(rgb, CV_8UC3, 255);
+    disp_2_depth_range_grid(m_disp, m_crop_pointL, rgb, erode_msk, m_qmatrix, points, colors, normals);
+
+    int pointnum = points.size();
+    for(int i = 0; i < pointnum; ++i) {
+        if( points[ i ].x != PT_UNDEFINED)
+        {
+            if(points[i].z <= 1600.f || points[i].z >= 2800.f) {
+                points[i].x = PT_UNDEFINED;
+                points[i].y = PT_UNDEFINED;
+                points[i].z = PT_UNDEFINED;
+                colors[i] = Vec3b(0,0,0);
+                normals[i] = Vec3f(0,0,0);
+            }
+            else  validnum ++;
+        }
+    }
+
+    string savefn = m_out_dir + "/" + m_frame_name + "_pointcloud_" + m_stereo_name + ".ply";
+    cout << "\nsave " << savefn << " done. " << validnum << " Points." << endl;
+    writePLY(savefn, w, h, validnum, PT_HAS_COLOR|PT_HAS_NORMAL, points, colors, normals);
+}
+
+
+

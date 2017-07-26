@@ -8,10 +8,11 @@
 #include "qx_upsampling/qx_zdepth_upsampling_using_rbf.h"
 #include "hashmap.h"
 
-#include "../../../Qing/qing_disp.h"
-#include "../../../Qing/qing_timer.h"
-#include "../../../Qing/qing_image.h"
-#include "../../../Qing/qing_median_filter.h"
+#include "../../Qing/qing_disp.h"
+#include "../../Qing/qing_timer.h"
+#include "../../Qing/qing_image.h"
+#include "../../Qing/qing_matching_cost.h"
+#include "../../Qing/qing_median_filter.h"
 
 const CCType CCNAME = zncc;
 const CAType CANAME = bf;
@@ -232,7 +233,7 @@ void StereoFlow::calc_cluster_costs_l(const int st_k, const int ed_k, const int 
             }
         }
 
-        mcosts[k-st_k] = qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
+        mcosts[k-st_k] = qing_ncc_value(ncc_vec_l, ncc_vec_r); // qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
     }
 }
 
@@ -279,7 +280,7 @@ void StereoFlow::calc_cluster_costs_r(const int st_k, const int ed_k, const int 
             }
         }
 
-        mcosts[k-st_k] = qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
+        mcosts[k-st_k] = qing_ncc_value(ncc_vec_l, ncc_vec_r); //qing_calc_ncc_value(ncc_vec_l, ncc_vec_r);
     }
 }
 

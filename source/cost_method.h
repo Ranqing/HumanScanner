@@ -7,7 +7,7 @@
 #include <cmath>
 using namespace std;
 
-#include "../../../Qing/qing_disp.h"
+#include "../../Qing/qing_disp.h"
 
 #define DEFAULT_CEN_WND 9
 #define DEFAULT_NCC_WND 9

@@ -20,6 +20,7 @@ public:
     void copy_disp_from_stereo();
     void disp_2_depth(const Mat& dsp, const Mat& msk, const Mat& img, vector<Vec3f>& points, vector<Vec3f>& colors);
     void triangulate();                         //disparity to depth then to 3D points
+    void triangulate_range_grid();
 
 private:
     string m_img_folder;                        //image folder
